@@ -1,4 +1,6 @@
-#!pip install --upgrade open_spiel dm-haiku
+#
+
+#!pip install --upgrade tensorflow jax open_spiel dm-haiku
 
 # Copyright 2019 DeepMind Technologies Limited
 #
