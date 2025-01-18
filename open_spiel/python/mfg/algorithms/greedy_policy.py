@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,3 +42,10 @@ class GreedyPolicy(policy_std.Policy):
     amax_q = [0.0 for _ in state.legal_actions()]
     amax_q[np.argmax(q)] = 1.0
     return dict(zip(state.legal_actions(), amax_q))
+
+  def action(self, state, player_id=None):
+    q = [
+        self._state_action_value(state, action)
+        for action in state.legal_actions()
+    ]
+    return state.legal_actions()[np.argmax(q)]

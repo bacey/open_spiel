@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """The setup script for setuptools.
 
 See https://setuptools.readthedocs.io/en/latest/setuptools.html
@@ -56,8 +55,8 @@ class BuildExt(build_ext):
     except OSError as e:
       ext_names = ", ".join(e.name for e in self.extensions)
       raise RuntimeError(
-          f"CMake must be installed to build the following extensions: {ext_names}"
-      ) from e
+          "CMake must be installed to build" +
+          f"the following extensions: {ext_names}") from e
     print("Found CMake")
 
     cxx = "clang++"
@@ -81,12 +80,6 @@ class BuildExt(build_ext):
     if os.environ.get("CXX") is not None:
       cxx = os.environ.get("CXX")
     env = os.environ.copy()
-    # If not specified, assume ACPC and Hanabi are built in.
-    # Disable this by passing e.g. OPEN_SPIEL_BUILD_WITH_ACPC=OFF when building
-    if env.get("OPEN_SPIEL_BUILD_WITH_ACPC") is None:
-      env["OPEN_SPIEL_BUILD_WITH_ACPC"] = "ON"
-    if env.get("OPEN_SPIEL_BUILD_WITH_HANABI") is None:
-      env["OPEN_SPIEL_BUILD_WITH_HANABI"] = "ON"
     cmake_args = [
         f"-DPython3_EXECUTABLE={sys.executable}",
         f"-DCMAKE_CXX_COMPILER={cxx}",
@@ -97,16 +90,11 @@ class BuildExt(build_ext):
     subprocess.check_call(
         ["cmake", ext.sourcedir] + cmake_args, cwd=self.build_temp,
         env=env)
-    if os.environ.get("OPEN_SPIEL_BUILD_ALL") is not None:
-      # Build everything (necessary for nox tests)
-      subprocess.check_call(["make", f"-j{os.cpu_count()}"],
-                            cwd=self.build_temp,
-                            env=env)
-    else:
-      # Build only pyspiel (for pip package)
-      subprocess.check_call(["make", "pyspiel", f"-j{os.cpu_count()}"],
-                            cwd=self.build_temp,
-                            env=env)
+
+    # Build only pyspiel (for pip package)
+    subprocess.check_call(["make", "pyspiel", f"-j{os.cpu_count()}"],
+                          cwd=self.build_temp,
+                          env=env)
 
 
 def _get_requirements(requirements_file):  # pylint: disable=g-doc-args
@@ -126,8 +114,8 @@ def _parse_line(s):
   return requirement.strip()
 
 
-# Get the requirements from file. During nox tests, this is in the current
-# directory, but when installing from pip it is in the parent directory
+# Get the requirements from file.
+# When installing from pip it is in the parent directory
 req_file = ""
 if os.path.exists("requirements.txt"):
   req_file = "requirements.txt"
@@ -136,7 +124,7 @@ else:
 
 setuptools.setup(
     name="open_spiel",
-    version="1.0.1",
+    version="1.5",
     license="Apache 2.0",
     author="The OpenSpiel authors",
     author_email="open_spiel@google.com",
@@ -145,9 +133,8 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/deepmind/open_spiel",
     install_requires=_get_requirements(req_file),
-    python_requires=">=3",
+    python_requires=">=3.9",
     ext_modules=[CMakeExtension("pyspiel", sourcedir="open_spiel")],
     cmdclass={"build_ext": BuildExt},
     zip_safe=False,
-    packages=setuptools.find_packages(include=["open_spiel", "open_spiel.*"])
-)
+    packages=setuptools.find_packages(include=["open_spiel", "open_spiel.*"]))

@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +15,17 @@
 #ifndef OPEN_SPIEL_GAME_TRANSFORMS_GAME_WRAPPER_H_
 #define OPEN_SPIEL_GAME_TRANSFORMS_GAME_WRAPPER_H_
 
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "open_spiel/abseil-cpp/absl/types/span.h"
+#include "open_spiel/abseil-cpp/absl/types/optional.h"
+#include "open_spiel/game_parameters.h"
 #include "open_spiel/spiel.h"
+#include "open_spiel/spiel_utils.h"
+#include "open_spiel/spiel_globals.h"
 
 // Wraps a game, forwarding everything to the original implementation.
 // Transforms can inherit from this, overriding only what they need.
@@ -84,7 +94,7 @@ class WrappedState : public State {
     return state_->LegalChanceOutcomes();
   }
 
-  const State& GetWrappedState() const { return *state_; }
+  virtual const State& GetWrappedState() const { return *state_; }
 
   std::vector<Action> ActionsConsistentWithInformationFrom(
       Action action) const override {
@@ -92,6 +102,11 @@ class WrappedState : public State {
   }
 
  protected:
+  // Another copy constructor usable by subclasses. Currently used by the cached
+  // tree game wrapper.
+  WrappedState(const WrappedState& other, std::unique_ptr<State> state)
+      : State(other), state_(std::move(state)) {}
+
   void DoApplyAction(Action action_id) override {
     state_->ApplyAction(action_id);
   }
@@ -119,7 +134,9 @@ class WrappedGame : public Game {
   int NumPlayers() const override { return game_->NumPlayers(); }
   double MinUtility() const override { return game_->MinUtility(); }
   double MaxUtility() const override { return game_->MaxUtility(); }
-  double UtilitySum() const override { return game_->UtilitySum(); }
+  absl::optional<double> UtilitySum() const override {
+    return game_->UtilitySum();
+  }
 
   std::vector<int> InformationStateTensorShape() const override {
     return game_->InformationStateTensorShape();
@@ -129,6 +146,15 @@ class WrappedGame : public Game {
     return game_->ObservationTensorShape();
   }
 
+  TensorLayout InformationStateTensorLayout() const override {
+    return game_->InformationStateTensorLayout();
+  }
+  TensorLayout ObservationTensorLayout() const override {
+    return game_->ObservationTensorLayout();
+  }
+  std::vector<int> PolicyTensorShape() const override {
+    return game_->PolicyTensorShape();
+  }
   int MaxGameLength() const override { return game_->MaxGameLength(); }
   int MaxChanceNodesInHistory() const override {
     return game_->MaxChanceNodesInHistory();

@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,10 +14,6 @@
 
 """Tests for open_spiel.python.algorithms.policy_aggregator."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import unittest
 from absl.testing import parameterized
 
@@ -26,6 +22,7 @@ import numpy as np
 from open_spiel.python import policy
 from open_spiel.python import rl_environment
 from open_spiel.python.algorithms import policy_aggregator
+import pyspiel
 
 
 class PolicyAggregatorTest(parameterized.TestCase):
@@ -87,6 +84,31 @@ class PolicyAggregatorTest(parameterized.TestCase):
       }
       for key in value_normal.keys():
         self.assertAlmostEqual(value[key], value_normal[key], 8)
+
+  @parameterized.named_parameters({
+      "testcase_name": "tic_tac_toe",
+      "game_name": "tic_tac_toe",
+  })
+  def test_policy_aggregation_variadic(self, game_name):
+    game = pyspiel.load_game(game_name)
+
+    uniform_policy = policy.UniformRandomPolicy(game)
+    first_action_policy = policy.FirstActionPolicy(game)
+
+    pol_ag = policy_aggregator.PolicyAggregator(game)
+
+    weights0 = [1.0, 0.0]
+    player0 = pol_ag.aggregate(
+        list(range(game.num_players())),
+        [[uniform_policy, first_action_policy]] + [[uniform_policy]] *
+        (game.num_players() - 1),
+        [weights0] + [[1.0]] * (game.num_players() - 1))
+    state = game.new_initial_state()
+    action_prob = player0.action_probabilities(state)
+    for action in action_prob:
+      if action_prob[action] > 0:
+        self.assertAlmostEqual(action_prob[action],
+                               1. / len(state.legal_actions()))
 
 
 if __name__ == "__main__":

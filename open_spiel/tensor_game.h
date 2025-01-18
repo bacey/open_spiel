@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "open_spiel/matrix_game.h"
 #include "open_spiel/normal_form_game.h"
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_utils.h"
@@ -68,6 +69,10 @@ class TensorGame : public NormalFormGame {
   double MinUtility() const override { return min_utility_; }
 
   double MaxUtility() const override { return max_utility_; }
+
+  std::string ActionToString(Player player, Action action) const override {
+    return ActionName(player, action);
+  }
 
   const std::vector<int>& Shape() const { return shape_; }
   const double PlayerUtility(const Player player,
@@ -120,6 +125,15 @@ class TensorGame : public NormalFormGame {
   double GetUtility(Player player, const std::vector<Action>& joint_action)
       const override {
     return PlayerUtility(player, joint_action);
+  }
+
+  std::shared_ptr<const matrix_game::MatrixGame> AsMatrixGame() const {
+    SPIEL_CHECK_EQ(NumPlayers(), 2);
+    const GameType& game_type = GetType();
+    return matrix_game::CreateMatrixGame(
+        game_type.short_name, game_type.long_name,
+        action_names_[0], action_names_[1],
+        utilities_[0], utilities_[1]);
   }
 
  private:

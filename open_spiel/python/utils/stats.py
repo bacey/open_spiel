@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Some basic stats classes."""
 
 import math
@@ -79,9 +78,9 @@ class BasicStats(object):
   def as_dict(self):
     return {
         "num": self.num,
-        "min": self.min,
-        "max": self.max,
-        "avg": self.avg,
+        "min": float(self.min),
+        "max": float(self.max),
+        "avg": float(self.avg),
         "std_dev": self.std_dev,
     }
 
@@ -89,7 +88,7 @@ class BasicStats(object):
     if self.num == 0:
       return "num=0"
     return "sum: %.4f, avg: %.4f, dev: %.4f, min: %.4f, max: %.4f, num: %d" % (
-        self.sum, self.avg, self.dev, self.min, self.max, self.num)
+        self._sum, self.avg, self.std_dev, self.min, self.max, self.num)
 
 
 class HistogramNumbered:

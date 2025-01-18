@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,12 +15,16 @@
 #include <iostream>
 #include <memory>
 #include <random>
+#include <sstream>
+#include <string>
+#include <vector>
 
 #include "open_spiel/abseil-cpp/absl/flags/flag.h"
 #include "open_spiel/abseil-cpp/absl/flags/parse.h"
 #include "open_spiel/abseil-cpp/absl/random/distributions.h"
 #include "open_spiel/abseil-cpp/absl/strings/match.h"
-#include "open_spiel/games/chess.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_split.h"
+#include "open_spiel/games/chess/chess.h"
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_utils.h"
 #include "open_spiel/utils/init.h"
@@ -56,6 +60,7 @@ void RandomUciBot() {
       while (pos < tokens.size()) {
         if (tokens[pos] == "moves") {
           has_moves = true;
+          ++pos;
           break;
         }
         if (pos > 2) fen << ' ';
@@ -73,11 +78,20 @@ void RandomUciBot() {
           ++pos;
         }
       }
-    } else if (absl::StartsWith(line, "go movetime ")) {
+      // Bot should return a move given all types of go commands
+    } else if (absl::StartsWith(line, "go movetime") ||
+               absl::StartsWith(line, "go depth") ||
+               absl::StartsWith(line, "go nodes") ||
+               absl::StartsWith(line, "go mate")) {
+      std::cout << "info string Random uci bot uci info statistics may not be "
+                   "accurate.\n";
       std::vector<Action> legal_actions = state->LegalActions();
       int index = absl::Uniform<int>(rng, 0, legal_actions.size());
       Action action = legal_actions[index];
       chess::Move move = ActionToMove(action, chess_state->Board());
+      std::cout << "info depth 1 seldepth 1 multipv 1 nodes 1 nps 1000 "
+                   "hashfull 0 tbhits 0 time 1 pv "
+                << move.ToLAN() << "\n";
       std::cout << "bestmove " << move.ToLAN() << std::endl;
     } else if (line == "quit") {
       return;
@@ -90,7 +104,7 @@ void RandomUciBot() {
 }  // namespace uci
 }  // namespace open_spiel
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   open_spiel::Init("", &argc, &argv, false);
   absl::ParseCommandLine(argc, argv);
   open_spiel::uci::RandomUciBot();

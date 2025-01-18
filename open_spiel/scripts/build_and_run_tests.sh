@@ -79,13 +79,6 @@ else
   TEST_NUM_PROCS=$ARG_num_threads
 fi
 
-# if we are in a virtual_env, we will not create a new one inside.
-if [[ "$VIRTUAL_ENV" != "" ]]
-then
-  echo -e "\e[1m\e[93mVirtualenv already detected. We do not create a new one.\e[0m"
-  ArgsLibSet virtualenv false
-fi
-
 echo -e "\e[33mRunning ${0} from $PWD\e[0m"
 PYBIN=${PYBIN:-"python3"}
 PYBIN=`which ${PYBIN}`
@@ -95,7 +88,15 @@ then
   continue
 fi
 
-PYVERSION=$($PYBIN -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
+# if we are in a virtual_env, we will not create a new one inside.
+if [[ "$VIRTUAL_ENV" != "" ]]
+then
+  echo -e "\e[1m\e[93mVirtualenv already detected. We do not create a new one.\e[0m"
+  ArgsLibSet virtualenv false
+  # When you're in a virtual environment, the python binary should be just python3.
+  # Otherwise, it uses the environment's python.
+  PYBIN="python3"
+fi
 
 VENV_DIR="./venv"
 if [[ $ARG_virtualenv == "true" ]]; then
@@ -115,7 +116,11 @@ if [[ $ARG_virtualenv == "true" ]]; then
   else
     echo -e "\e[33mReusing virtualenv from $VENV_DIR.\e[0m"
   fi
+  PYBIN=python
   source $VENV_DIR/bin/activate
+  # When you're in a virtual environment, the python binary should be just python3.
+  # Otherwise, it uses the environment's python.
+  PYBIN="python3"
 fi
 
 # We only exit the virtualenv if we were asked to create one.
@@ -129,11 +134,12 @@ trap cleanup EXIT
 
 if [[ $ARG_install == "true" ]]; then
   echo -e "\e[33mInstalling the requirements (use --noinstall to skip).\e[0m"
-  ${PYBIN} -m pip install --upgrade -r ./requirements.txt
+  $PYBIN -m pip install --upgrade -r ./requirements.txt
 else
   echo -e "\e[33mSkipping installation of requirements.txt.\e[0m"
 fi
 
+PYVERSION=$($PYBIN -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
 BUILD_DIR="$ARG_build_dir"
 mkdir -p $BUILD_DIR
 
@@ -159,8 +165,8 @@ function print_tests_failed {
   echo -e "\033[31mAt least one test failed.\e[0m"
   echo "If this is the first time you have run these tests, try:"
   echo "python3 -m pip install -r requirements.txt"
-  echo "Note that outside a virtualenv, you will need to install the system "
-  echo "wide matplotlib: sudo apt-get install python-matplotlib"
+  echo "Note that outside a virtualenv, you will need to install the "
+  echo "system-wide matplotlib: sudo apt-get install python-matplotlib"
   exit 1
 }
 
@@ -168,21 +174,13 @@ function print_skipping_tests {
   echo -e "\033[32m*** Skipping to run tests.\e[0m"
 }
 
-function execute_export_graph {
-  echo "Running tf_trajectories_example preliminary Python script"
-  python ../open_spiel/contrib/python/export_graph.py
-}
-
 # Build / install everything and run tests (C++, Python, optionally Julia).
 if [[ $ARG_build_with_pip == "true" ]]; then
-  # TODO(author2): We probably want to use `python3 -m pip install .` directly
-  # and skip the usage of nox.
-  ${PYBIN} -m pip install nox
-
-  if nox -s tests; then
-    echo -e "\033[32mAll tests passed. Nicely done!\e[0m"
+  ${PYBIN} -m pip install .
+  if ctest -j$TEST_NUM_PROCS --output-on-failure ../open_spiel; then
+    print_tests_passed
   else
-    echo -e "\033[31mAt least one test failed.\e[0m"
+    print_tests_failed
     exit 1
   fi
 else
@@ -199,6 +197,7 @@ else
         -DCMAKE_CXX_COMPILER=${CXX}                  \
         -DCMAKE_PREFIX_PATH=${LIBCXXWRAP_JULIA_DIR}  \
         -DBUILD_TYPE=Testing                         \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
         ../open_spiel
 
   if [ "$ARG_test_only" != "all" ]
@@ -223,10 +222,6 @@ else
     if [[ $ARG_build_only == "true" ]]; then
       echo -e "\033[32m*** Skipping runing tests as build_only is ${ARG_build_only} \e[0m"
     else
-      if [[ ${OPEN_SPIEL_BUILD_WITH_TENSORFLOW_CC:-"OFF"} == "ON" && $ARG_test_only =~ "tf_trajectories_example" ]]; then
-        execute_export_graph
-      fi
-
       if ctest -j$TEST_NUM_PROCS --output-on-failure -R "$ARG_test_only" ../open_spiel; then
         print_tests_passed
       else
@@ -243,10 +238,6 @@ else
     else
       # Test everything
       echo "Running all tests"
-
-      if [[ ${OPEN_SPIEL_BUILD_WITH_TENSORFLOW_CC:-"OFF"} == "ON" ]]; then
-        execute_export_graph
-      fi
 
       if ctest -j$TEST_NUM_PROCS --output-on-failure ../open_spiel; then
         print_tests_passed

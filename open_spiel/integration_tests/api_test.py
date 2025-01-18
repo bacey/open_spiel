@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Tests for open_spiel.integration_tests.api."""
 
 import enum
@@ -383,17 +382,17 @@ class EnforceAPIOnPartialTreeBase(parameterized.TestCase):
             self.assertEmpty(state.legal_actions(player), msg=msg)
 
   def test_private_information_contents(self):
-    try:
-      private_observation = make_observation(
-          self.game,
-          pyspiel.IIGObservationType(
-              public_info=False,
-              perfect_recall=False,
-              private_info=pyspiel.PrivateInfoType.SINGLE_PLAYER))
-    except (RuntimeError, ValueError):
-      return
+    private_observation = make_observation(
+        self.game,
+        pyspiel.IIGObservationType(
+            public_info=False,
+            perfect_recall=False,
+            private_info=pyspiel.PrivateInfoType.SINGLE_PLAYER,
+        ),
+    )
 
-    if private_observation.string_from(self.some_states[0], 0) is None:
+    if (not private_observation
+        or private_observation.string_from(self.some_states[0], 0) is None):
       return
 
     player_has_private_info = [False] * self.game.num_players()
@@ -411,14 +410,15 @@ class EnforceAPIOnPartialTreeBase(parameterized.TestCase):
       self.assertFalse(any(player_has_private_info))
 
   def test_no_invalid_public_observations(self):
-    try:
-      public_observation = make_observation(
-          self.game,
-          pyspiel.IIGObservationType(
-              public_info=True,
-              perfect_recall=False,
-              private_info=pyspiel.PrivateInfoType.NONE))
-    except (ValueError, RuntimeError):
+    public_observation = make_observation(
+        self.game,
+        pyspiel.IIGObservationType(
+            public_info=True,
+            perfect_recall=False,
+            private_info=pyspiel.PrivateInfoType.NONE,
+        ),
+    )
+    if not public_observation:
       return
 
     if public_observation.string_from(self.some_states[0], 0) is None:
@@ -580,10 +580,7 @@ def _assert_is_perfect_recall_recursive(state, current_history,
                           for s, a in current_history
                           if s.current_player() == current_player]
 
-      if not all([
-          np.array_equal(x, y)
-          for x, y in zip(expected_infosets_history, infosets_history)
-      ]):
+      if infosets_history != expected_infosets_history:
         raise ValueError("The history as tensor in the same infoset "
                          "are different:\n"
                          "History: {!r}\n".format(state.history()))

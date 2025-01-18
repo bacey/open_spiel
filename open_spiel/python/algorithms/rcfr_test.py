@@ -1,20 +1,16 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import itertools
 
@@ -42,7 +38,6 @@ def _new_model():
       _GAME,
       num_hidden_layers=1,
       num_hidden_units=13,
-      num_hidden_factors=1,
       use_skip_connections=True)
 
 
@@ -480,12 +475,18 @@ class RcfrTest(parameterized.TestCase, tf.test.TestCase):
       data = data.batch(12)
       data = data.repeat(num_epochs)
 
-      optimizer = tf.keras.optimizers.Adam(lr=0.005, amsgrad=True)
+      optimizer = tf.keras.optimizers.Adam(learning_rate=0.005, amsgrad=True)
 
+      model = models[regret_player]
       for x, y in data:
-        optimizer.minimize(
-            lambda: tf.losses.huber_loss(y, models[regret_player](x)),  # pylint: disable=cell-var-from-loop
-            models[regret_player].trainable_variables)
+        with tf.GradientTape() as tape:
+          loss = tf.losses.huber_loss(y, model(x))
+        optimizer.apply_gradients(
+            zip(
+                tape.gradient(loss, model.trainable_variables),
+                model.trainable_variables,
+            )
+        )
 
       regret_player = reach_weights_player
 
@@ -508,12 +509,17 @@ class RcfrTest(parameterized.TestCase, tf.test.TestCase):
       data = data.batch(12)
       data = data.repeat(num_epochs)
 
-      optimizer = tf.keras.optimizers.Adam(lr=0.005, amsgrad=True)
+      optimizer = tf.keras.optimizers.Adam(learning_rate=0.005, amsgrad=True)
 
       for x, y in data:
-        optimizer.minimize(
-            lambda: tf.losses.huber_loss(y, model(x)),  # pylint: disable=cell-var-from-loop
-            model.trainable_variables)
+        with tf.GradientTape() as tape:
+          loss = tf.losses.huber_loss(y, model(x))
+        optimizer.apply_gradients(
+            zip(
+                tape.gradient(loss, model.trainable_variables),
+                model.trainable_variables,
+            )
+        )
 
     average_policy = patient.average_policy()
     self.assertGreater(pyspiel.nash_conv(_GAME, average_policy), 0.91)
@@ -569,12 +575,17 @@ class RcfrTest(parameterized.TestCase, tf.test.TestCase):
       data = data.batch(12)
       data = data.repeat(num_epochs)
 
-      optimizer = tf.keras.optimizers.Adam(lr=0.005, amsgrad=True)
+      optimizer = tf.keras.optimizers.Adam(learning_rate=0.005, amsgrad=True)
 
       for x, y in data:
-        optimizer.minimize(
-            lambda: tf.losses.huber_loss(y, model(x)),  # pylint: disable=cell-var-from-loop
-            model.trainable_variables)
+        with tf.GradientTape() as tape:
+          loss = tf.losses.huber_loss(y, model(x))
+        optimizer.apply_gradients(
+            zip(
+                tape.gradient(loss, model.trainable_variables),
+                model.trainable_variables,
+            )
+        )
 
     average_policy = patient.average_policy()
     self.assertGreater(pyspiel.nash_conv(_GAME, average_policy), 0.91)

@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """An Oracle for Exact Best Responses.
 
 This class computes the best responses against sets of policies.
@@ -34,6 +33,8 @@ class BestResponseOracle(optimization_oracle.AbstractOracle):
                game=None,
                all_states=None,
                state_to_information_state=None,
+               prob_cut_threshold=-1.0,
+               action_value_tolerance=-1.0,
                **kwargs):
     """Init function for the RLOracle.
 
@@ -47,6 +48,10 @@ class BestResponseOracle(optimization_oracle.AbstractOracle):
       state_to_information_state: A dict mapping str(state) to
         state.information_state for every state in the game. Cached for improved
         performance.
+      prob_cut_threshold: For cpp backend, a partially computed best-response
+        can be computed when using a prob_cut_threshold >= 0.
+      action_value_tolerance: For cpp backend, the max-entropy best-response
+        policy is computed if a non-negative `action_value_tolerance` is used.
       **kwargs: kwargs
     """
     super(BestResponseOracle, self).__init__(**kwargs)
@@ -54,9 +59,9 @@ class BestResponseOracle(optimization_oracle.AbstractOracle):
     if self.best_response_backend == 'cpp':
       # Should compute all_states and state_to_information_state only once in
       # the program, as caching them speeds up TabularBestResponse tremendously.
-      self.all_states, self.state_to_information_state =\
+      self.all_states, self.state_to_information_state = (
           utils.compute_states_and_info_states_if_none(
-              game, all_states, state_to_information_state)
+              game, all_states, state_to_information_state))
 
       policy = openspiel_policy.UniformRandomPolicy(game)
 
@@ -68,7 +73,9 @@ class BestResponseOracle(optimization_oracle.AbstractOracle):
       # TODO(b/140426861): Use a single best-responder once the code supports
       # multiple player ids.
       self.best_response_processors = [
-          pyspiel.TabularBestResponse(game, best_responder_id, policy_to_dict)
+          pyspiel.TabularBestResponse(game, best_responder_id, policy_to_dict,
+                                      prob_cut_threshold,
+                                      action_value_tolerance)
           for best_responder_id in range(game.num_players())
       ]
       self.best_responders = [
@@ -145,11 +152,11 @@ class BestResponseOracle(optimization_oracle.AbstractOracle):
               policy_utils.policy_to_dict(aggr_policy, game, self.all_states,
                                           self.state_to_information_state))
 
-          self.best_responders[current_player] =\
+          self.best_responders[current_player] = (
               best_response.CPPBestResponsePolicy(
                   game, current_player, aggr_policy, self.all_states,
                   self.state_to_information_state,
-                  self.best_response_processors[current_player])
+                  self.best_response_processors[current_player]))
           best_resp = self.best_responders[current_player]
         player_policies.append(best_resp)
       new_policies.append(player_policies)

@@ -23,7 +23,7 @@ GetParameters() = {game=python_iterated_prisoners_dilemma(max_game_length=9999,t
 NumPlayers() = 2
 MinUtility() = 0.0
 MaxUtility() = 9.999e+04
-UtilitySum() = 0.0
+UtilitySum() = None
 MaxGameLength() = 19998
 ToString() = "turn_based_simultaneous_game(game=python_iterated_prisoners_dilemma(max_game_length=9999,termination_probability=0.125))"
 
@@ -36,8 +36,8 @@ HistoryString() = ""
 IsChanceNode() = False
 IsSimultaneousNode() = False
 CurrentPlayer() = 0
-Rewards() = [0.0, 0.0]
-Returns() = [0.0, 0.0]
+Rewards() = [0, 0]
+Returns() = [0, 0]
 LegalActions() = [0, 1]
 StringLegalActions() = ["COOPERATE", "DEFECT"]
 
@@ -53,8 +53,8 @@ HistoryString() = "0"
 IsChanceNode() = False
 IsSimultaneousNode() = False
 CurrentPlayer() = 1
-Rewards() = [0.0, 0.0]
-Returns() = [0.0, 0.0]
+Rewards() = [0, 0]
+Returns() = [0, 0]
 LegalActions() = [0, 1]
 StringLegalActions() = ["COOPERATE", "DEFECT"]
 
@@ -69,7 +69,7 @@ HistoryString() = "0, 1"
 IsChanceNode() = True
 IsSimultaneousNode() = False
 CurrentPlayer() = -1
-ChanceOutcomes() = [(0, 0.875), (1, 0.125)]
+ChanceOutcomes() = [(0,0.875), (1,0.125)]
 LegalActions() = [0, 1]
 StringLegalActions() = ["CONTINUE", "STOP"]
 
@@ -85,8 +85,8 @@ HistoryString() = "0, 1, 0"
 IsChanceNode() = False
 IsSimultaneousNode() = False
 CurrentPlayer() = 0
-Rewards() = [0.0, 0.0]
-Returns() = [0.0, 10.0]
+Rewards() = [0, 10]
+Returns() = [0, 10]
 LegalActions() = [0, 1]
 StringLegalActions() = ["COOPERATE", "DEFECT"]
 
@@ -102,8 +102,8 @@ HistoryString() = "0, 1, 0, 0"
 IsChanceNode() = False
 IsSimultaneousNode() = False
 CurrentPlayer() = 1
-Rewards() = [0.0, 0.0]
-Returns() = [0.0, 10.0]
+Rewards() = [0, 0]
+Returns() = [0, 10]
 LegalActions() = [0, 1]
 StringLegalActions() = ["COOPERATE", "DEFECT"]
 
@@ -118,7 +118,7 @@ HistoryString() = "0, 1, 0, 0, 0"
 IsChanceNode() = True
 IsSimultaneousNode() = False
 CurrentPlayer() = -1
-ChanceOutcomes() = [(0, 0.875), (1, 0.125)]
+ChanceOutcomes() = [(0,0.875), (1,0.125)]
 LegalActions() = [0, 1]
 StringLegalActions() = ["CONTINUE", "STOP"]
 
@@ -134,8 +134,8 @@ HistoryString() = "0, 1, 0, 0, 0, 0"
 IsChanceNode() = False
 IsSimultaneousNode() = False
 CurrentPlayer() = 0
-Rewards() = [0.0, 0.0]
-Returns() = [5.0, 15.0]
+Rewards() = [5, 5]
+Returns() = [5, 15]
 LegalActions() = [0, 1]
 StringLegalActions() = ["COOPERATE", "DEFECT"]
 
@@ -151,8 +151,8 @@ HistoryString() = "0, 1, 0, 0, 0, 0, 0"
 IsChanceNode() = False
 IsSimultaneousNode() = False
 CurrentPlayer() = 1
-Rewards() = [0.0, 0.0]
-Returns() = [5.0, 15.0]
+Rewards() = [0, 0]
+Returns() = [5, 15]
 LegalActions() = [0, 1]
 StringLegalActions() = ["COOPERATE", "DEFECT"]
 
@@ -171,5 +171,5 @@ HistoryString() = "0, 1, 0, 0, 0, 0, 0, 0, 1"
 IsChanceNode() = False
 IsSimultaneousNode() = False
 CurrentPlayer() = -4
-Rewards() = [10.0, 20.0]
-Returns() = [10.0, 20.0]
+Rewards() = [5, 5]
+Returns() = [10, 20]

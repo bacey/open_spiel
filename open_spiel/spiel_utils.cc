@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,6 +14,7 @@
 
 #include "open_spiel/spiel_utils.h"
 
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -21,7 +22,6 @@
 #include <vector>
 
 #include "open_spiel/abseil-cpp/absl/algorithm/container.h"
-#include "open_spiel/abseil-cpp/absl/strings/match.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_format.h"
 #include "open_spiel/abseil-cpp/absl/types/optional.h"
@@ -164,6 +164,38 @@ std::string VectorOfPairsToString(std::vector<std::pair<A, B>>& vec,
     }
   }
   return str;
+}
+
+// TODO(author5): remove this when the abseil version is upgraded.
+bool StrContainsIgnoreCase(const std::string& haystack,
+                           const std::string& needle) {
+  std::string haystack_copy = haystack;
+  std::string needle_copy = needle;
+  for (int i = 0; i < haystack_copy.size(); ++i) {
+    haystack_copy[i] = std::tolower(haystack_copy[i]);
+  }
+  for (int i = 0; i < needle_copy.size(); ++i) {
+    needle_copy[i] = std::tolower(needle_copy[i]);
+  }
+  return (haystack_copy.find(needle_copy) != std::string::npos);
+}
+
+int SamplerFromRng::operator()(absl::Span<const double> probs) {
+  const float cutoff = rng_();
+  float sum = 0.0f;
+  for (int i = 0; i < probs.size(); ++i) {
+    sum += probs[i];
+    if (cutoff < sum) {
+      return i;
+    }
+  }
+
+  // To be on the safe side, cover case cutoff == 1.0 and sum < 1
+  for (int i = probs.size() - 1; i >= 0; --i) {
+    if (probs[i] > 0.0) return i;
+  }
+
+  SpielFatalError("SamplerFromRng: not a probability distribution.");
 }
 
 }  // namespace open_spiel

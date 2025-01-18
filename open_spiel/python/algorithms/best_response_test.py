@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Tests for open_spiel.python.algorithms.best_response."""
 
 from absl.testing import absltest
@@ -162,16 +161,28 @@ class BestResponseTest(parameterized.TestCase, absltest.TestCase):
         "python_iterated_prisoners_dilemma(max_game_length=5)")
     test_policy = policy.UniformRandomPolicy(game)
     br = best_response.BestResponsePolicy(game, policy=test_policy, player_id=0)
-    expected_policy = {  # Always defect.
-        "us:CCCC op:CCCC": 1,
-        "us:DDDD op:CCCC": 1,
-        "us:CDCD op:DCDC": 1,
-        "us:CCCC op:DDDD": 1,
-    }
-    self.assertEqual(
-        expected_policy,
-        {key: br.best_response_action(key) for key in expected_policy})
+
+    # Best policy is always to defect; we verify this for a handful of states
+    self.assertEqual(br.best_response_action("us:CCCC op:CCCC"), 1)
+    self.assertEqual(br.best_response_action("us:DDDD op:CCCC"), 1)
+    self.assertEqual(br.best_response_action("us:CDCD op:DCDC"), 1)
+    self.assertEqual(br.best_response_action("us:CCCC op:DDDD"), 1)
+
+    # Expected value per turn = 5.5 (avg of 1 and 10)
+    # Expected game length = sum(0.875**i for i in range(5)) = 3.896728515625
+    # Game value = 5.5 * 3.896728515625 = 21.4320068359375
     self.assertAlmostEqual(br.value(game.new_initial_state()), 21.4320068359375)
+
+
+class TabularBestResponseMDPTest(absltest.TestCase):
+
+  def test_tabular_best_response_mdp(self):
+    # See pybind11/policy.cc for these functions.
+    game = pyspiel.load_game("kuhn_poker")
+    uniform_random_policy = pyspiel.UniformRandomPolicy(game)
+    tbr_mdp = pyspiel.TabularBestResponseMDP(game, uniform_random_policy)
+    tbr_info = tbr_mdp.nash_conv()
+    self.assertGreater(tbr_info.nash_conv, 0)
 
 
 if __name__ == "__main__":

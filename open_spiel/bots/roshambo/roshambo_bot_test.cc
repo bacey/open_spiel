@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,9 +31,8 @@ uint_fast32_t Seed() { return absl::ToUnixMicros(absl::Now()); }
 
 void MakeAllRoshamboBots() {
   std::vector<std::unique_ptr<Bot>> bots;
-  for (std::pair<std::string, std::function<int()>> bot_pair :
-       ::roshambo_tournament::bot_map) {
-    bots.push_back(roshambo::MakeRoshamboBot(0, bot_pair.first));
+  for (const auto& [name, factory] : ::roshambo_tournament::bot_map) {
+    bots.push_back(roshambo::MakeRoshamboBot(0, name));
   }
   SPIEL_CHECK_EQ(bots.size(), roshambo::kNumBots);
 }
@@ -55,8 +54,6 @@ void RoshamboBotHistoryTest() {
   for (int i = 0; i < roshambo::kNumThrows; ++i) {
     for (Player p = 0; p < num_players; ++p)
       joint_actions[p] = bots[p]->Step(*state);
-    for (Player p = 0; p < num_players; ++p)
-      bots[p]->InformActions(*state, joint_actions);
     state->ApplyActions(joint_actions);
     if (i == 0) {
       // Copybot wins the first round.
@@ -96,8 +93,6 @@ void RoshamboBotBasicPlayGame() {
     while (!state->IsTerminal()) {
       for (Player p = 0; p < num_players; ++p)
         joint_actions[p] = bots[p]->Step(*state);
-      for (Player p = 0; p < num_players; ++p)
-        bots[p]->InformActions(*state, joint_actions);
       state->ApplyActions(joint_actions);
     }
   }

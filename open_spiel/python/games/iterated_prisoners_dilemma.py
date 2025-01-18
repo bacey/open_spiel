@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,7 +32,7 @@ _GAME_TYPE = pyspiel.GameType(
     long_name="Python Iterated Prisoner's Dilemma",
     dynamics=pyspiel.GameType.Dynamics.SIMULTANEOUS,
     chance_mode=pyspiel.GameType.ChanceMode.EXPLICIT_STOCHASTIC,
-    information=pyspiel.GameType.Information.IMPERFECT_INFORMATION,
+    information=pyspiel.GameType.Information.PERFECT_INFORMATION,
     utility=pyspiel.GameType.Utility.GENERAL_SUM,
     reward_model=pyspiel.GameType.RewardModel.REWARDS,
     max_num_players=_NUM_PLAYERS,
@@ -69,8 +69,11 @@ class IteratedPrisonersDilemmaGame(pyspiel.Game):
             num_players=2,
             min_utility=np.min(_PAYOFF) * max_game_length,
             max_utility=np.max(_PAYOFF) * max_game_length,
-            utility_sum=0.0,
-            max_game_length=max_game_length), params)
+            utility_sum=None,
+            max_game_length=max_game_length,
+        ),
+        params,
+    )
     self._termination_probability = params["termination_probability"]
 
   def new_initial_state(self):
@@ -184,8 +187,11 @@ class IteratedPrisonersDilemmaObserver:
 
   def string_from(self, state, player):
     """Observation of `state` from the PoV of `player`, as a string."""
-    return (f"us:{state.action_history_string(player)} "
-            f"op:{state.action_history_string(1 - player)}")
+    if self.iig_obs_type.public_info:
+      return (f"us:{state.action_history_string(player)} "
+              f"op:{state.action_history_string(1 - player)}")
+    else:
+      return None
 
 
 # Register the game with the OpenSpiel library

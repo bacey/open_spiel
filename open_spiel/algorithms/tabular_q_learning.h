@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,7 +34,14 @@ namespace algorithms {
 //
 // Based on the implementation in Sutton and Barto, Intro to RL. Second Edition,
 // 2018. Section 6.5.
-// Note: current implementation only supports full bootstrapping (lambda = 0).
+//
+// Includes implementation of Watkins’s Q(lambda) which can be found in
+// Sutton and Barto, Intro to RL. Second Edition, 2018. Section 12.10.
+// (E.g. https://www.andrew.cmu.edu/course/10-703/textbook/BartoSutton.pdf)
+// Eligibility traces are implemented with the "accumulate"
+// method (+1 at each iteration) instead of "replace" implementation
+// (doesn't sum trace values). Parameter lambda_ determines the level
+// of bootstraping.
 
 class TabularQLearningSolver {
   static inline constexpr double kDefaultDepthLimit = -1;
@@ -63,9 +70,11 @@ class TabularQLearningSolver {
   double GetBestActionValue(const State& state, double min_utility);
 
   // Given a player and a state, gets the action, sampled from an epsilon-greedy
-  // policy
-  Action SampleActionFromEpsilonGreedyPolicy(const State& state,
-                                             double min_utility);
+  // policy. Returns <action, chosen_uniformly> where the second element
+  // indicates whether an action was chosen uniformly (which occurs with epsilon
+  // chance).
+  std::pair<Action, bool> SampleActionFromEpsilonGreedyPolicy(
+      const State& state, double min_utility);
 
   // Moves a chance node to the next decision/terminal node by sampling from
   // the legal actions repeatedly
@@ -79,6 +88,8 @@ class TabularQLearningSolver {
   double lambda_;
   std::mt19937 rng_;
   absl::flat_hash_map<std::pair<std::string, Action>, double> values_;
+  absl::flat_hash_map<std::pair<std::string, Action>, double>
+      eligibility_traces_;
 };
 
 }  // namespace algorithms

@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -58,6 +58,12 @@ ActionsAndProbs ToDeterministicPolicy(const ActionsAndProbs& actions_and_probs,
 ActionsAndProbs GetDeterministicPolicy(const std::vector<Action>& legal_actions,
                                        Action action);
 
+// Check that two state policies are equal (within a float tolerance). Does an
+// exact check, so the actions must be in the same order.
+bool StatePoliciesEqual(const ActionsAndProbs& state_policy1,
+                        const ActionsAndProbs& state_policy2,
+                        double float_tolerance);
+
 // A general policy object. A policy is a mapping from states to list of
 // (action, prob) pairs for all the legal actions at the state.
 class Policy {
@@ -77,7 +83,7 @@ class Policy {
 
   // A convenience method for callers that want to use arrays.
   virtual std::pair<std::vector<Action>, std::vector<double>>
-  GetStatePolicyAsParallelVectors(const std::string info_state) const {
+  GetStatePolicyAsParallelVectors(const std::string& info_state) const {
     std::pair<std::vector<Action>, std::vector<double>> parray;
     for (const auto& action_and_prob : GetStatePolicy(info_state)) {
       parray.first.push_back(action_and_prob.first);
@@ -114,8 +120,8 @@ class Policy {
   // Returns a list of (action, prob) pairs for the policy for the specified
   // player at this state. If the policy is not available at the state, returns
   // an empty list.
-  virtual ActionsAndProbs GetStatePolicy(
-      const State& state, Player player) const {
+  virtual ActionsAndProbs GetStatePolicy(const State& state,
+                                         Player player) const {
     return GetStatePolicy(state.InformationStateString(player));
   }
 
@@ -262,13 +268,46 @@ class TabularPolicy : public Policy {
     return policy_table_;
   }
 
-  const std::string ToString() const;
+  int size() const { return policy_table_.size(); }
+
+  std::string ToString() const;
 
   // A ToString where the keys are sorted.
-  const std::string ToStringSorted() const;
+  std::string ToStringSorted() const;
+
+ protected:
+  std::unordered_map<std::string, ActionsAndProbs> policy_table_;
+};
+
+// A partial tabular policy is one that is not entirely complete: only a subset
+// of the full table is included. When called on state that is not in the table,
+// a specific fallback policy is queried instead.
+class PartialTabularPolicy : public TabularPolicy {
+ public:
+  // Creates an empty partial tabular policy with a uniform fallback policy.
+  PartialTabularPolicy();
+
+  // Creates a partial tabular policy with the specified table with a uniform
+  // fallback policy.
+  PartialTabularPolicy(
+      const std::unordered_map<std::string, ActionsAndProbs>& table);
+
+  // Creates a partial tabular policy with the specified table with the
+  // specified fallback policy.
+  PartialTabularPolicy(
+      const std::unordered_map<std::string, ActionsAndProbs>& table,
+      std::shared_ptr<Policy> fallback_policy);
+
+  // These retrieval methods are all modified in the same way: they first check
+  // if the key is in the table. If so, they return the state policy from the
+  // table. Otherwise, they forward the call to the fallback policy.
+  ActionsAndProbs GetStatePolicy(const State& state) const override;
+  ActionsAndProbs GetStatePolicy(const State& state,
+                                 Player player) const override;
+  ActionsAndProbs GetStatePolicy(const std::string& info_state) const override;
 
  private:
-  std::unordered_map<std::string, ActionsAndProbs> policy_table_;
+  std::shared_ptr<Policy> fallback_policy_;
 };
 
 std::unique_ptr<TabularPolicy> DeserializeTabularPolicy(
@@ -278,8 +317,8 @@ std::unique_ptr<TabularPolicy> DeserializeTabularPolicy(
 // tabular version, except that this works for large games.
 class UniformPolicy : public Policy {
  public:
-  ActionsAndProbs GetStatePolicy(
-      const State& state, Player player) const override {
+  ActionsAndProbs GetStatePolicy(const State& state,
+                                 Player player) const override {
     if (state.IsSimultaneousNode()) {
       return UniformStatePolicy(state, player);
     } else {
@@ -294,8 +333,7 @@ class UniformPolicy : public Policy {
   }
 };
 
-// Chooses all legal actions with equal probability. This is equivalent to the
-// tabular version, except that this works for large games.
+// Among all legal actions, choose the first action deterministically.
 class FirstActionPolicy : public Policy {
  public:
   ActionsAndProbs GetStatePolicy(const State& state,
@@ -344,15 +382,28 @@ class PreferredActionPolicy : public Policy {
 TabularPolicy ToTabularPolicy(const Game& game, const Policy* policy);
 
 // Helper functions that generate policies for testing.
+// The player parameter can be used to only generate policies for a single
+// player. By default -1 will generate policies for all players.
 TabularPolicy GetEmptyTabularPolicy(const Game& game,
-                                    bool initialize_to_uniform = false);
+                                    bool initialize_to_uniform = false,
+                                    Player player = -1);
 TabularPolicy GetUniformPolicy(const Game& game);
-TabularPolicy GetRandomPolicy(const Game& game, int seed = 0);
+TabularPolicy GetRandomPolicy(
+    const Game& game, int seed = 0, Player player = -1);
+TabularPolicy GetFlatDirichletPolicy(
+    const Game& game, int seed = 0, Player player = -1);
+TabularPolicy GetRandomDeterministicPolicy(
+    const Game& game, int seed = 0, Player player = -1);
 TabularPolicy GetFirstActionPolicy(const Game& game);
 
+// Returns a policy with only valid actions on states that are reachable.
+// Actions with zero probability or states that are unreachable are not present.
+TabularPolicy GetRandomDeterministicVisitPolicy(
+    const Game& game, int seed = 0, Player player = -1);
+
 // Returns a preferred action policy as a tabular policy.
-TabularPolicy GetPrefActionPolicy(
-    const Game& game, const std::vector<Action>& pref_action);
+TabularPolicy GetPrefActionPolicy(const Game& game,
+                                  const std::vector<Action>& pref_action);
 
 std::string PrintPolicy(const ActionsAndProbs& policy);
 

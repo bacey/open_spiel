@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,8 +41,9 @@ import pyspiel
 FLAGS = flags.FLAGS
 
 # Use a small depth limit to keep the length of the test reasonable.
-flags.DEFINE_integer('get_all_states_depth_limit', 10,
-                     'Depth limit of getting all the states (-1 for unlimited)')
+flags.DEFINE_integer(
+    'get_all_states_depth_limit', 10,
+    'Depth limit of getting all the states (-1 for unlimited)')
 flags.DEFINE_integer('rl_env_simulations', 10,
                      'Number of simulations for the RL environment tests')
 
@@ -97,15 +98,17 @@ class FiniteHorizonTest(parameterized.TestCase):
   @parameterized.parameters(
       {'game_name': 'python_mfg_crowd_modelling'},
       {'game_name': 'mfg_crowd_modelling'},
+      {'game_name': 'mfg_garnet'},
       {'game_name': 'mfg_crowd_modelling_2d'},
+      {'game_name': 'python_mfg_periodic_aversion'},
       {'game_name': 'python_mfg_predator_prey'},
   )
   def test_is_finite_horizon(self, game_name):
     """Check that the game has no loop."""
     game = pyspiel.load_game(game_name)
     states = set(game.new_initial_states())
-    to_string = lambda s: s.observation_string(pyspiel.PlayerId.
-                                               DEFAULT_PLAYER_ID)
+    def to_string(s):
+      return s.observation_string(pyspiel.PlayerId.DEFAULT_PLAYER_ID)
     all_states_key = set(to_string(state) for state in states)
     while type_from_states(states) != pyspiel.StateType.TERMINAL:
       new_states_key, states = _next_states(states, to_string)
@@ -115,14 +118,16 @@ class FiniteHorizonTest(parameterized.TestCase):
   @parameterized.parameters(
       {'game_name': 'python_mfg_crowd_modelling'},
       {'game_name': 'mfg_crowd_modelling'},
+      {'game_name': 'mfg_garnet'},
       {'game_name': 'mfg_crowd_modelling_2d'},
+      {'game_name': 'python_mfg_periodic_aversion'},
       {'game_name': 'python_mfg_predator_prey'},
   )
   def test_has_at_least_an_action(self, game_name):
     """Check that all population's state have at least one action."""
     game = pyspiel.load_game(game_name)
-    to_string = lambda s: s.observation_string(pyspiel.PlayerId.
-                                               DEFAULT_PLAYER_ID)
+    def to_string(s):
+      return s.observation_string(pyspiel.PlayerId.DEFAULT_PLAYER_ID)
     states = get_all_states.get_all_states(
         game,
         depth_limit=FLAGS.get_all_states_depth_limit,
@@ -136,7 +141,9 @@ class FiniteHorizonTest(parameterized.TestCase):
   @parameterized.parameters(
       {'game_name': 'python_mfg_crowd_modelling'},
       {'game_name': 'mfg_crowd_modelling'},
+      {'game_name': 'mfg_garnet'},
       {'game_name': 'mfg_crowd_modelling_2d'},
+      {'game_name': 'python_mfg_periodic_aversion'},
       {'game_name': 'python_mfg_predator_prey'},
   )
   def test_rl_environment(self, game_name):
@@ -147,16 +154,23 @@ class FiniteHorizonTest(parameterized.TestCase):
 
     envs = [
         rl_environment.Environment(
-            game, distribution=mfg_dist, mfg_population=p)
+            game, mfg_distribution=mfg_dist, mfg_population=p)
         for p in range(game.num_players())
     ]
     for p, env in enumerate(envs):
       for _ in range(FLAGS.rl_env_simulations):
         time_step = env.reset()
         while not time_step.last():
-          print(time_step)
           a = random.choice(time_step.observations['legal_actions'][p])
           time_step = env.step([a])
+
+    env = envs[0]
+    self.assertEqual(env.mfg_distribution, mfg_dist)
+
+    # Update the distribution.
+    new_mfg_dist = distribution.DistributionPolicy(game, uniform_policy)
+    env.update_mfg_distribution(new_mfg_dist)
+    self.assertEqual(env.mfg_distribution, new_mfg_dist)
 
 
 if __name__ == '__main__':

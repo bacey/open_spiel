@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,10 +13,6 @@
 # limitations under the License.
 
 """LP Solver for two-player zero-sum games."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import cvxopt
 import numpy as np
@@ -355,8 +351,11 @@ def is_dominated(action,
   # Multiagent Systems: Algorithmic, Game-Theoretic, and Logical Foundations
   # http://www.masfoundations.org/mas.pdf
   assert mode in (DOMINANCE_STRICT, DOMINANCE_VERY_WEAK, DOMINANCE_WEAK)
-  payoffs = utils.game_payoffs_array(game_or_payoffs)[player] if isinstance(
-      game_or_payoffs, pyspiel.NormalFormGame) else np.asfarray(game_or_payoffs)
+  payoffs = (
+      utils.game_payoffs_array(game_or_payoffs)[player]
+      if isinstance(game_or_payoffs, pyspiel.NormalFormGame)
+      else np.asarray(game_or_payoffs, dtype=np.float64)
+  )
 
   # Reshape payoffs so rows correspond to `player` and cols to the joint action
   # of all other players
@@ -457,10 +456,13 @@ def iterated_dominance(game_or_payoffs, mode, tol=1e-7):
        `live_actions[player][action]` is `True` if `action` wasn't dominated for
        `player`.
   """
-  payoffs = utils.game_payoffs_array(game_or_payoffs) if isinstance(
-      game_or_payoffs, pyspiel.NormalFormGame) else np.asfarray(game_or_payoffs)
+  payoffs = (
+      utils.game_payoffs_array(game_or_payoffs)
+      if isinstance(game_or_payoffs, pyspiel.NormalFormGame)
+      else np.asarray(game_or_payoffs, dtype=np.float64)
+  )
   live_actions = [
-      np.ones(num_actions, np.bool) for num_actions in payoffs.shape[1:]
+      np.ones(num_actions, bool) for num_actions in payoffs.shape[1:]
   ]
   progress = True
   while progress:

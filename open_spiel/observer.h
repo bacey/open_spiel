@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2019 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,6 +50,7 @@
 #include "open_spiel/abseil-cpp/absl/container/flat_hash_set.h"
 #include "open_spiel/abseil-cpp/absl/container/inlined_vector.h"
 #include "open_spiel/abseil-cpp/absl/strings/string_view.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_join.h"
 #include "open_spiel/abseil-cpp/absl/types/span.h"
 #include "open_spiel/game_parameters.h"
 #include "open_spiel/spiel_utils.h"
@@ -63,7 +64,7 @@ class State;
 using ObservationParams = GameParameters;
 
 // Information about a multi-dimensional tensor span, eg name, shape, etc.
-// TODO(etar) add types information. For now only floats are supported.
+// TODO(author16) add types information. For now only floats are supported.
 class SpanTensorInfo {
  public:
   using Shape = absl::InlinedVector<int, 4>;
@@ -285,34 +286,34 @@ struct IIGObservationType {
 // Default observation type for imperfect information games.
 // Corresponds to the ObservationTensor / ObservationString methods.
 inline constexpr IIGObservationType kDefaultObsType{
-    .public_info = true,
-    .perfect_recall = false,
-    .private_info = PrivateInfoType::kSinglePlayer};
+    /*public_info*/true,
+    /*perfect_recall*/false,
+    /*private_info*/PrivateInfoType::kSinglePlayer};
 
 // Default observation type for imperfect information games.
 // Corresponds to the InformationStateTensor / InformationStateString methods.
 inline constexpr IIGObservationType kInfoStateObsType{
-    .public_info = true,
-    .perfect_recall = true,
-    .private_info = PrivateInfoType::kSinglePlayer};
+    /*public_info*/true,
+    /*perfect_recall*/true,
+    /*private_info*/PrivateInfoType::kSinglePlayer};
 
 // Incremental public observation, mainly used for imperfect information games.
 inline constexpr IIGObservationType kPublicObsType{
-    .public_info = true,
-    .perfect_recall = false,
-    .private_info = PrivateInfoType::kNone};
+    /*public_info*/true,
+    /*perfect_recall*/false,
+    /*private_info*/PrivateInfoType::kNone};
 
 // Complete public observation, mainly used for imperfect information games.
 inline constexpr IIGObservationType kPublicStateObsType{
-    .public_info = true,
-    .perfect_recall = true,
-    .private_info = PrivateInfoType::kNone};
+    /*public_info*/true,
+    /*perfect_recall*/true,
+    /*private_info*/PrivateInfoType::kNone};
 
 // Incremental private observation, mainly used for imperfect information games.
 inline constexpr IIGObservationType kPrivateObsType{
-    .public_info = false,
-    .perfect_recall = false,
-    .private_info = PrivateInfoType::kSinglePlayer};
+    /*public_info*/false,
+    /*perfect_recall*/false,
+    /*private_info*/PrivateInfoType::kSinglePlayer};
 
 // An Observer is something which can produce an observation of a State,
 // e.g. a Tensor or collection of Tensors or a string.
@@ -382,7 +383,7 @@ class Observation {
   //       The compressed data is a raw memory representation of an array
   //       of floats. Passing it from, say, big-endian architecture
   //       to little-endian architecture may corrupt the original data.
-  // TODO(etar) address the note above and implement things in a platform
+  // TODO(author16) address the note above and implement things in a platform
   //             independent way.
   std::string Compress() const;
   void Decompress(absl::string_view compressed);
@@ -441,6 +442,22 @@ class ObserverRegisterer {
     static std::map<std::pair<std::string, std::string>, CreateFunc> impl;
     return impl;
   }
+};
+
+// Registers an observer named "single_tensor" which falls back to
+// state.observation_tensor or state.information_state_tensor (which generate a
+// single tensor).
+//
+// Note that one cannot pass empty ObservationParams to
+// game->MakeObserver(...) to achieve the same behavior in general:
+// leduc, goofspiel and many other games will generate multiple tensors in that
+// case.
+//
+// Use:
+// RegisterSingleTensorObserver single_tensor(kGameType.short_name);
+class RegisterSingleTensorObserver {
+ public:
+  RegisterSingleTensorObserver(const std::string& game_name);
 };
 
 // Pure function that creates a tensor from an observer. Slower than using an

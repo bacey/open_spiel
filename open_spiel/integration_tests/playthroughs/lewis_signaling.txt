@@ -49,7 +49,7 @@ ObservationString(0) = "ChanceNode -- no observation"
 ObservationString(1) = "ChanceNode -- no observation"
 ObservationTensor(0): ◯◯◯◯◯◯
 ObservationTensor(1): ◯◯◯◯◯◯
-ChanceOutcomes() = [(0, 0.3333333333333333), (1, 0.3333333333333333), (2, 0.3333333333333333)]
+ChanceOutcomes() = [(0,0.333333), (1,0.333333), (2,0.333333)]
 LegalActions() = [0, 1, 2]
 StringLegalActions() = ["State 0", "State 1", "State 2"]
 
@@ -72,8 +72,8 @@ ObservationString(0) = "Current turn: 0\nState: 0\n"
 ObservationString(1) = "Current turn: 0\nMessage: -1\n"
 ObservationTensor(0): ◉◯◯◉◯◯
 ObservationTensor(1): ◉◯◯◯◯◯
-Rewards() = [0.0, 0.0]
-Returns() = [0.0, 0.0]
+Rewards() = [0, 0]
+Returns() = [0, 0]
 LegalActions() = [0, 1, 2]
 StringLegalActions() = ["Message 0", "Message 1", "Message 2"]
 
@@ -96,8 +96,8 @@ ObservationString(0) = "Current turn: 1\nState: 0\n"
 ObservationString(1) = "Current turn: 1\nMessage: 1\n"
 ObservationTensor(0): ◯◉◯◉◯◯
 ObservationTensor(1): ◯◉◯◯◉◯
-Rewards() = [0.0, 0.0]
-Returns() = [0.0, 0.0]
+Rewards() = [0, 0]
+Returns() = [0, 0]
 LegalActions() = [0, 1, 2]
 StringLegalActions() = ["Action 0", "Action 1", "Action 2"]
 
@@ -120,5 +120,5 @@ ObservationString(0) = "Current turn: 1\nState: 0\n"
 ObservationString(1) = "Current turn: 1\nMessage: 1\n"
 ObservationTensor(0): ◯◉◉◉◯◯
 ObservationTensor(1): ◯◉◉◯◉◯
-Rewards() = [1.0, 1.0]
-Returns() = [1.0, 1.0]
+Rewards() = [1, 1]
+Returns() = [1, 1]

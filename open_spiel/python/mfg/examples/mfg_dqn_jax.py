@@ -1,37 +1,39 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """DQN agents trained on an MFG against a crowd following a uniform policy."""
 
-from absl import app
 from absl import flags
-from absl import logging
+import jax
 
 from open_spiel.python import policy
+from open_spiel.python import rl_agent_policy
 from open_spiel.python import rl_environment
 from open_spiel.python.jax import dqn
 from open_spiel.python.mfg.algorithms import distribution
 from open_spiel.python.mfg.algorithms import nash_conv
 from open_spiel.python.mfg.algorithms import policy_value
-from open_spiel.python.mfg.games import crowd_modelling  # pylint: disable=unused-import
-from open_spiel.python.mfg.games import predator_prey  # pylint: disable=unused-import
-import pyspiel
+from open_spiel.python.mfg.games import factory
+from open_spiel.python.utils import app
+from open_spiel.python.utils import metrics
 
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string("game_name", "python_mfg_predator_prey",
                     "Name of the game.")
+flags.DEFINE_string(
+    "env_setting", None,
+    "Name of the game settings. If None, the game name will be used.")
 flags.DEFINE_integer("num_train_episodes", int(20e6),
                      "Number of training episodes.")
 flags.DEFINE_integer("eval_every", 10000,
@@ -65,55 +67,20 @@ flags.DEFINE_float("epsilon_end", 0.1, "Final exploration parameter.")
 flags.DEFINE_bool("use_checkpoints", False, "Save/load neural network weights.")
 flags.DEFINE_string("checkpoint_dir", "/tmp/dqn_test",
                     "Directory to save/load the agent.")
-
-GAME_SETTINGS = {
-    "mfg_crowd_modelling_2d": {
-        "only_distribution_reward": False,
-        "forbidden_states": "[0|0;0|1]",
-        "initial_distribution": "[0|2;0|3]",
-        "initial_distribution_value": "[0.5;0.5]",
-    }
-}
-
-
-class DQNPolicies(policy.Policy):
-  """Joint policy to be evaluated."""
-
-  def __init__(self, envs, policies):
-    game = envs[0].game
-    player_ids = list(range(game.num_players()))
-    super(DQNPolicies, self).__init__(game, player_ids)
-    self._policies = policies
-    self._obs = {
-        "info_state": [None] * game.num_players(),
-        "legal_actions": [None] * game.num_players()
-    }
-
-  def action_probabilities(self, state, player_id=None):
-    cur_player = state.current_player()
-    legal_actions = state.legal_actions(cur_player)
-
-    self._obs["current_player"] = cur_player
-    self._obs["info_state"][cur_player] = (state.observation_tensor(cur_player))
-    self._obs["legal_actions"][cur_player] = legal_actions
-
-    info_state = rl_environment.TimeStep(
-        observations=self._obs, rewards=None, discounts=None, step_type=None)
-
-    p = self._policies[cur_player].step(info_state, is_evaluation=True).probs
-    prob_dict = {action: p[action] for action in legal_actions}
-    return prob_dict
+flags.DEFINE_string(
+    "logdir", None,
+    "Logging dir to use for TF summary files. If None, the metrics will only "
+    "be logged to stderr.")
 
 
 def main(unused_argv):
-  logging.info("Loading %s", FLAGS.game_name)
-  game = pyspiel.load_game(FLAGS.game_name,
-                           GAME_SETTINGS.get(FLAGS.game_name, {}))
+  game = factory.create_game_with_setting(FLAGS.game_name, FLAGS.env_setting)
   uniform_policy = policy.UniformRandomPolicy(game)
   mfg_dist = distribution.DistributionPolicy(game, uniform_policy)
 
   envs = [
-      rl_environment.Environment(game, distribution=mfg_dist, mfg_population=p)
+      rl_environment.Environment(
+          game, mfg_distribution=mfg_dist, mfg_population=p)
       for p in range(game.num_players())
   ]
   info_state_size = envs[0].observation_spec()["info_state"][0]
@@ -140,30 +107,48 @@ def main(unused_argv):
       dqn.DQN(idx, info_state_size, num_actions, hidden_layers_sizes, **kwargs)
       for idx in range(game.num_players())
   ]
-  joint_avg_policy = DQNPolicies(envs, agents)
+  joint_avg_policy = rl_agent_policy.JointRLAgentPolicy(
+      game, {idx: agent for idx, agent in enumerate(agents)},
+      envs[0].use_observation)
   if FLAGS.use_checkpoints:
     for agent in agents:
       if agent.has_checkpoint(FLAGS.checkpoint_dir):
         agent.restore(FLAGS.checkpoint_dir)
 
-  for ep in range(FLAGS.num_train_episodes):
-    if (ep + 1) % FLAGS.eval_every == 0:
-      losses = [agent.loss for agent in agents]
-      logging.info("Losses: %s", losses)
+  # Metrics writer will also log the metrics to stderr.
+  just_logging = FLAGS.logdir is None or jax.host_id() > 0
+  writer = metrics.create_default_writer(
+      logdir=FLAGS.logdir, just_logging=just_logging)
+
+  # Save the parameters.
+  writer.write_hparams(kwargs)
+
+  for ep in range(1, FLAGS.num_train_episodes + 1):
+    if ep % FLAGS.eval_every == 0:
+      writer.write_scalars(ep, {
+          f"agent{i}/loss": float(agent.loss) for i, agent in enumerate(agents)
+      })
+
+      initial_states = game.new_initial_states()
+
+      # Exact best response to uniform.
       nash_conv_obj = nash_conv.NashConv(game, uniform_policy)
-      print(
-          str(ep + 1) + " Exact Best Response to Uniform " +
-          str(nash_conv_obj.br_values()))
+      writer.write_scalars(
+          ep, {
+              f"exact_br/{state}": value
+              for state, value in zip(initial_states, nash_conv_obj.br_values())
+          })
+
+      # DQN best response to uniform.
       pi_value = policy_value.PolicyValue(game, mfg_dist, joint_avg_policy)
-      print(
-          str(ep + 1) + " DQN Best Response to Uniform " + str([
-              pi_value.eval_state(state)
-              for state in game.new_initial_states()
-          ]))
+      writer.write_scalars(ep, {
+          f"dqn_br/{state}": pi_value.eval_state(state)
+          for state in initial_states
+      })
+
       if FLAGS.use_checkpoints:
         for agent in agents:
           agent.save(FLAGS.checkpoint_dir)
-      logging.info("_____________________________________________")
 
     for p in range(game.num_players()):
       time_step = envs[p].reset()
@@ -174,6 +159,9 @@ def main(unused_argv):
 
       # Episode is over, step all agents with final info state.
       agents[p].step(time_step)
+
+  # Make sure all values were written.
+  writer.flush()
 
 
 if __name__ == "__main__":

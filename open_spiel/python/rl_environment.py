@@ -1,17 +1,16 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Reinforcement Learning (RL) Environment for Open Spiel.
 
 This module wraps Open Spiel Python interface providing an RL-friendly API. It
@@ -44,10 +43,6 @@ defaults to -2 (module level constant `SIMULTANEOUS_PLAYER_ID`).
 
 See open_spiel/python/examples/rl_example.py for example usages.
 """
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import collections
 
@@ -151,7 +146,7 @@ class Environment(object):
                chance_event_sampler=None,
                observation_type=None,
                include_full_state=False,
-               distribution=None,
+               mfg_distribution=None,
                mfg_population=None,
                enable_legality_check=False,
                **kwargs):
@@ -166,7 +161,7 @@ class Environment(object):
         default to INFORMATION_STATE unless the game doesn't provide it.
       include_full_state: whether or not to include the full serialized
         OpenSpiel state in the observations (sometimes useful for debugging).
-      distribution: the distribution over states if the game is a mean field
+      mfg_distribution: the distribution over states if the game is a mean field
         game.
       mfg_population: The Mean Field Game population to consider.
       enable_legality_check: Check the legality of the move before stepping.
@@ -174,7 +169,7 @@ class Environment(object):
     """
     self._chance_event_sampler = chance_event_sampler or ChanceEventSampler()
     self._include_full_state = include_full_state
-    self._distribution = distribution
+    self._mfg_distribution = mfg_distribution
     self._mfg_population = mfg_population
     self._enable_legality_check = enable_legality_check
 
@@ -214,7 +209,7 @@ class Environment(object):
     self._use_observation = (observation_type == ObservationType.OBSERVATION)
 
     if self._game.get_type().dynamics == pyspiel.GameType.Dynamics.MEAN_FIELD:
-      assert distribution is not None
+      assert mfg_distribution is not None
       assert mfg_population is not None
       assert 0 <= mfg_population < self._num_players
 
@@ -261,6 +256,10 @@ class Environment(object):
     if self._include_full_state:
       observations["serialized_state"] = pyspiel.serialize_game_and_state(
           self._game, self._state)
+
+    # For gym environments
+    if hasattr(self._state, "last_info"):
+      observations["info"] = self._state.last_info
 
     return TimeStep(
         observations=observations,
@@ -377,7 +376,7 @@ class Environment(object):
       if self._state.current_player() == pyspiel.PlayerId.MEAN_FIELD:
         dist_to_register = self._state.distribution_support()
         dist = [
-            self._distribution.value_str(str_state, default_value=0.0)
+            self._mfg_distribution.value_str(str_state, default_value=0.0)
             for str_state in dist_to_register
         ]
         self._state.update_distribution(dist)
@@ -469,3 +468,13 @@ class Environment(object):
   @property
   def get_state(self):
     return self._state
+
+  @property
+  def mfg_distribution(self):
+    return self._mfg_distribution
+
+  def update_mfg_distribution(self, mfg_distribution):
+    """Updates the distribution over the states of the mean field game."""
+    assert (
+        self._game.get_type().dynamics == pyspiel.GameType.Dynamics.MEAN_FIELD)
+    self._mfg_distribution = mfg_distribution

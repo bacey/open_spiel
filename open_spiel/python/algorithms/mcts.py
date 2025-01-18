@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,10 +13,6 @@
 # limitations under the License.
 
 """Monte-Carlo Tree Search algorithm for game play."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import math
 import time
@@ -208,7 +204,8 @@ class MCTSBot(pyspiel.Bot):
                random_state=None,
                child_selection_fn=SearchNode.uct_value,
                dirichlet_noise=None,
-               verbose=False):
+               verbose=False,
+               dont_return_chance_node=False):
     """Initializes a MCTS Search algorithm in the form of a bot.
 
     In multiplayer games, or non-zero-sum games, the players will play the
@@ -232,6 +229,8 @@ class MCTSBot(pyspiel.Bot):
       verbose: Whether to print information about the search tree before
         returning the action. Useful for confirming the search is working
         sensibly.
+      dont_return_chance_node: If true, do not stop expanding at chance nodes.
+        Enabled for AlphaZero.
 
     Raises:
       ValueError: if the game type isn't supported.
@@ -254,6 +253,7 @@ class MCTSBot(pyspiel.Bot):
     self._dirichlet_noise = dirichlet_noise
     self._random_state = random_state or np.random.RandomState()
     self._child_selection_fn = child_selection_fn
+    self.dont_return_chance_node = dont_return_chance_node
 
   def restart_at(self, state):
     pass
@@ -307,7 +307,9 @@ class MCTSBot(pyspiel.Bot):
     visit_path = [root]
     working_state = state.clone()
     current_node = root
-    while not working_state.is_terminal() and current_node.explore_count > 0:
+    while (not working_state.is_terminal() and
+           current_node.explore_count > 0) or (
+               working_state.is_chance_node() and self.dont_return_chance_node):
       if not current_node.children:
         # For a new node, initialize its state, then choose a child as normal.
         legal_actions = self.evaluator.prior(working_state)
@@ -393,7 +395,6 @@ class MCTSBot(pyspiel.Bot):
     Returns:
       The most visited move from the root node.
     """
-    root_player = state.current_player()
     root = SearchNode(None, state.current_player(), 1)
     for _ in range(self.max_simulations):
       visit_path, working_state = self._apply_tree_policy(root, state)
@@ -405,9 +406,15 @@ class MCTSBot(pyspiel.Bot):
         returns = self.evaluator.evaluate(working_state)
         solved = False
 
-      for node in reversed(visit_path):
-        node.total_reward += returns[root_player if node.player ==
-                                     pyspiel.PlayerId.CHANCE else node.player]
+      while visit_path:
+        # For chance nodes, walk up the tree to find the decision-maker.
+        decision_node_idx = -1
+        while visit_path[decision_node_idx].player == pyspiel.PlayerId.CHANCE:
+          decision_node_idx -= 1
+        # Chance node targets are for the respective decision-maker.
+        target_return = returns[visit_path[decision_node_idx].player]
+        node = visit_path.pop()
+        node.total_reward += target_return
         node.explore_count += 1
 
         if solved and node.children:

@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,17 +23,13 @@ the strategy profiles of the game.  To train these networks a fixed ring buffer
 train the networks.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import math
 import random
 import numpy as np
 from scipy import stats
 import torch
-import torch.nn as nn
+from torch import nn
 import torch.nn.functional as F
 
 from open_spiel.python import policy
@@ -358,7 +354,8 @@ class DeepCFRSolver(policy.Policy):
       return state.returns()[player]
     elif state.is_chance_node():
       # If this is a chance node, sample an action
-      action = np.random.choice([i[0] for i in state.chance_outcomes()])
+      chance_outcome, chance_proba = zip(*state.chance_outcomes())
+      action = np.random.choice(chance_outcome, p=chance_proba)
       return self._traverse_game_tree(state.child(action), player)
     elif state.current_player() == player:
       sampled_regret = collections.defaultdict(float)
@@ -419,15 +416,17 @@ class DeepCFRSolver(policy.Policy):
       matched_regrets[max(legal_actions, key=lambda a: raw_advantages[a])] = 1
     return advantages, matched_regrets
 
-  def action_probabilities(self, state):
+  def action_probabilities(self, state, player_id=None):
     """Computes action probabilities for the current player in state.
 
     Args:
       state: (pyspiel.State) The state to compute probabilities for.
+      player_id: unused, but needed to implement the Policy API.
 
     Returns:
       (dict) action probabilities for a single batch.
     """
+    del player_id
     cur_player = state.current_player()
     legal_actions = state.legal_actions(cur_player)
     info_state_vector = np.array(state.information_state_tensor())

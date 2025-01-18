@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,6 +32,14 @@ namespace open_spiel {
 // The string returned can be passed directly to LoadGame.
 std::string HunlGameString(const std::string &betting_abstraction);
 std::string HulhGameString(const std::string &betting_abstraction);
+// Additional helper functions for other common Texas Hold'em games:
+// 3 players with blinds at 1/2 (SB / BB), using differing stack sizes
+std::string Multiway3max_1_2GameString(const std::string &betting_abstraction,
+                                       int sb_stack, int bb_stack,
+                                       int dealer_stack);
+// 6 players with blinds at 1/2 (SB / BB), all using the same input stack size
+std::string Multiway6max_1_2GameString(const std::string &betting_abstraction,
+                                       int buy_in);
 
 // Turn based goofspiel w/ imperfect information and descending points order.
 std::string TurnBasedGoofspielGameString(int num_cards);

@@ -1,22 +1,16 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-"""Tests for open_spiel.python.policy."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 from absl.testing import absltest
 from absl.testing import parameterized
@@ -26,6 +20,9 @@ from open_spiel.python import games  # pylint: disable=unused-import
 from open_spiel.python import policy
 from open_spiel.python.algorithms import get_all_states
 import pyspiel
+
+
+SEED = 187461917
 
 _TIC_TAC_TOE_STATES = [
     {
@@ -52,7 +49,94 @@ _TIC_TAC_TOE_STATES = [
 ]
 
 
-def test_policy_on_game(self, game, policy_object):
+class DerivedPolicyTest(absltest.TestCase):
+
+  def test_derive_from_policy(self):
+    class DerivedPolicy(pyspiel.Policy):
+
+      def action_probabilities(self, state):
+        return {0: 0.1, 1: 0.9}
+
+      def get_state_policy(self, infostate):
+        return {10: 0.9, 11: 0.1}
+
+    policy_obj = DerivedPolicy()
+    self.assertEqual(DerivedPolicy.__bases__, (pyspiel.Policy,))
+    self.assertIsInstance(policy_obj, pyspiel.Policy)
+    self.assertEqual(
+        {0: 0.1, 1: 0.9},
+        policy_obj.action_probabilities(
+            pyspiel.load_game("kuhn_poker").new_initial_state()
+        ),
+    )
+    self.assertEqual(
+        {0: 0.1, 1: 0.9}, policy_obj.action_probabilities("some infostate")
+    )
+    self.assertEqual(
+        {10: 0.9, 11: 0.1}, policy_obj.get_state_policy("some infostate")
+    )
+    with self.assertRaises(RuntimeError):
+      policy_obj.serialize()
+
+  def test_cpp_policy_from_py(self):
+    class DerivedPolicy(pyspiel.Policy):
+
+      def action_probabilities(self, state):
+        return {0: 0.0, 1: 0.0}
+
+      def get_state_policy(self, infostate):
+        return [(2, 0.0), (3, 0.0)]
+
+      def get_state_policy_as_parallel_vectors(self, state):
+        if isinstance(state, str):
+          return [4, 5], [0, 0]
+        else:
+          return [6, 7], [0, 0]
+
+      def serialize(self, precision, delim):
+        return f"Serialized string, {precision=}, {delim=}"
+
+    policy_obj = DerivedPolicy()
+    self.assertEqual(
+        {0: 0.0, 1: 0.0},
+        pyspiel._policy_trampoline_testing.call_action_probabilities(
+            policy_obj, pyspiel.load_game("kuhn_poker").new_initial_state()
+        ),
+    )
+    self.assertEqual(
+        {0: 0.0, 1: 0.0},
+        pyspiel._policy_trampoline_testing.call_action_probabilities(
+            policy_obj, "some infostate"),
+    )
+    self.assertEqual(
+        [(2, 0.0), (3, 0.0)],
+        pyspiel._policy_trampoline_testing.call_get_state_policy(
+            policy_obj, pyspiel.load_game("kuhn_poker").new_initial_state()
+        ),
+    )
+    self.assertEqual(
+        [(2, 0.0), (3, 0.0)],
+        pyspiel._policy_trampoline_testing.call_get_state_policy(
+            policy_obj, "some infostate"),
+    )
+    self.assertEqual(
+        ([4, 5], [0, 0]),
+        pyspiel._policy_trampoline_testing.call_get_state_policy_as_parallel_vectors(
+            policy_obj, "some infostate"),
+    )
+    self.assertEqual(
+        ([6, 7], [0, 0]),
+        pyspiel._policy_trampoline_testing.call_get_state_policy_as_parallel_vectors(
+            policy_obj, pyspiel.load_game("kuhn_poker").new_initial_state()
+        ),
+    )
+    self.assertEqual(
+        pyspiel._policy_trampoline_testing.call_serialize(policy_obj, 3, "!?"),
+        "Serialized string, precision=3, delim='!?'",
+    )
+
+
+def test_policy_on_game(self, game, policy_object, player=-1):
   """Checks the policy conforms to the conventions.
 
   Checks the Policy.action_probabilities contains only legal actions (but not
@@ -64,6 +148,7 @@ def test_policy_on_game(self, game, policy_object):
       function to test policies.
     game: A `pyspiel.Game`, same as the one used in the policy.
     policy_object: A `policy.Policy` object on `game`. to test.
+    player: Restrict testing policy to a player.
   """
 
   all_states = get_all_states.get_all_states(
@@ -94,7 +179,10 @@ def test_policy_on_game(self, game, policy_object):
     for prob in action_probabilities.values():
       sum_ += prob
       self.assertGreaterEqual(prob, 0)
-    self.assertAlmostEqual(1, sum_)
+    if player < 0 or state.current_player() == player:
+      self.assertAlmostEqual(1, sum_)
+    else:
+      self.assertAlmostEqual(0, sum_)
 
 
 _LEDUC_POKER = pyspiel.load_game("leduc_poker")
@@ -111,10 +199,28 @@ class CommonTest(parameterized.TestCase):
     test_policy_on_game(self, _LEDUC_POKER, policy_object)
 
   @parameterized.named_parameters([
-      ("pyspiel.UniformRandom", pyspiel.UniformRandomPolicy(_LEDUC_POKER)),
+      ("pyspiel.UniformRandomPolicy",
+       pyspiel.UniformRandomPolicy(_LEDUC_POKER)),
+      ("pyspiel.GetRandomPolicy",
+       pyspiel.GetRandomPolicy(_LEDUC_POKER, 1)),
+      ("pyspiel.GetFlatDirichletPolicy",
+       pyspiel.GetFlatDirichletPolicy(_LEDUC_POKER, 1)),
+      ("pyspiel.GetRandomDeterministicPolicy",
+       pyspiel.GetRandomDeterministicPolicy(_LEDUC_POKER, 1)),
   ])
   def test_cpp_policies_on_leduc(self, policy_object):
     test_policy_on_game(self, _LEDUC_POKER, policy_object)
+
+  @parameterized.named_parameters([
+      ("pyspiel.GetRandomPolicy0",
+       pyspiel.GetRandomPolicy(_LEDUC_POKER, 1, 0), 0),
+      ("pyspiel.GetFlatDirichletPolicy1",
+       pyspiel.GetFlatDirichletPolicy(_LEDUC_POKER, 1, 1), 1),
+      ("pyspiel.GetRandomDeterministicPolicym1",
+       pyspiel.GetRandomDeterministicPolicy(_LEDUC_POKER, 1, -1), -1),
+  ])
+  def test_cpp_player_policies_on_leduc(self, policy_object, player):
+    test_policy_on_game(self, _LEDUC_POKER, policy_object, player)
 
 
 class TabularTicTacToePolicyTest(parameterized.TestCase):
@@ -236,6 +342,84 @@ class TabularPolicyTest(parameterized.TestCase):
         "0b": 11,
     }
     self.assertEqual(expected, tabular_policy.state_lookup)
+
+  def test_partial_tabular_policy_empty_uniform(self):
+    """Tests that a partial tabular policy works for an empty policy."""
+    game = pyspiel.load_game("kuhn_poker")
+    # python tabular policy is initialized to uniform
+    python_tabular_policy = policy.TabularPolicy(game)
+    partial_pyspiel_policy = pyspiel.PartialTabularPolicy()
+    self.assertNotEmpty(python_tabular_policy.state_lookup)
+    all_states = get_all_states.get_all_states(game,
+                                               depth_limit=-1,
+                                               include_terminals=False,
+                                               include_chance_states=False,
+                                               include_mean_field_states=False)
+    self.assertNotEmpty(all_states)
+    for _, state in all_states.items():
+      tabular_probs = python_tabular_policy.action_probabilities(state)
+      state_policy = partial_pyspiel_policy.get_state_policy(state)
+      self.assertLen(state_policy, 2)
+      for a, p in state_policy:
+        self.assertAlmostEqual(p, tabular_probs[a])
+
+  def test_partial_tabular_policy_set_full(self):
+    """Tests the partial tabular policy works for a complete policy."""
+    game = pyspiel.load_game("kuhn_poker")
+    # python tabular policy is initialized to uniform
+    python_tabular_policy = policy.TabularPolicy(game)
+    partial_pyspiel_policy = pyspiel.PartialTabularPolicy()
+    self.assertNotEmpty(python_tabular_policy.state_lookup)
+    all_states = get_all_states.get_all_states(game,
+                                               depth_limit=-1,
+                                               include_terminals=False,
+                                               include_chance_states=False,
+                                               include_mean_field_states=False)
+    self.assertNotEmpty(all_states)
+    policy_dict = python_tabular_policy.to_dict()
+    partial_pyspiel_policy = pyspiel.PartialTabularPolicy(policy_dict)
+    for _, state in all_states.items():
+      tabular_probs = python_tabular_policy.action_probabilities(state)
+      state_policy = partial_pyspiel_policy.get_state_policy(state)
+      self.assertLen(state_policy, 2)
+      for a, p in state_policy:
+        self.assertAlmostEqual(p, tabular_probs[a])
+
+  def test_partial_tabular_policy_override_fallback(self):
+    """Tests the partial tabular policy for a truly partial policy.
+
+    Specifically: assigns a full policy, overrides some entries, and
+    removes others. Checks that the overridden ones return correctly and that
+    the missing ones return the fallback.
+    """
+    game = pyspiel.load_game("kuhn_poker")
+    # python tabular policy is initialized to uniform
+    python_tabular_policy = policy.TabularPolicy(game)
+    partial_pyspiel_policy = pyspiel.PartialTabularPolicy()
+    self.assertNotEmpty(python_tabular_policy.state_lookup)
+    all_states = get_all_states.get_all_states(game,
+                                               depth_limit=-1,
+                                               include_terminals=False,
+                                               include_chance_states=False,
+                                               include_mean_field_states=False)
+    self.assertNotEmpty(all_states)
+    policy_dict = python_tabular_policy.to_dict()
+    partial_pyspiel_policy = pyspiel.PartialTabularPolicy(policy_dict)
+    perturbed_policy_dict = {}
+    for key in policy_dict:
+      if np.random.uniform() < 0.5:
+        perturbed_policy_dict[key] = [(0, 1.0)]
+    partial_pyspiel_policy = pyspiel.PartialTabularPolicy(perturbed_policy_dict)
+    for _, state in all_states.items():
+      infostate_key = state.information_state_string()
+      state_policy = partial_pyspiel_policy.get_state_policy(state)
+      if infostate_key in perturbed_policy_dict:
+        self.assertLen(state_policy, 1)
+        self.assertAlmostEqual(state_policy[0][1], 1.0)
+      else:
+        tabular_probs = python_tabular_policy.action_probabilities(state)
+        for a, p in state_policy:
+          self.assertAlmostEqual(p, tabular_probs[a])
 
   def test_states(self):
     game = pyspiel.load_game("leduc_poker")
@@ -482,21 +666,20 @@ class ChildTest(absltest.TestCase):
 
   def test_child_function_expected_behavior_for_sim_game(self):
     """Test expected behavior of child on simultaneous games."""
-    game = pyspiel.load_game("python_dynamic_routing")
+    game = pyspiel.load_game("python_iterated_prisoners_dilemma")
     parameter_state = game.new_initial_state()
-    actions = [2, 2]
+    actions = [1, 1]
     new_state = policy.child(parameter_state, actions)
-    self.assertEqual(
-        str(new_state), ("Vehicle locations: ['O->A', 'O->A'], "
-                         "time: 1."))
+    self.assertEqual(str(new_state), ("p0:D p1:D"))
 
   def test_child_function_failure_behavior_for_sim_game(self):
     """Test failure behavior of child on simultaneous games."""
-    game = pyspiel.load_game("python_dynamic_routing")
+    game = pyspiel.load_game("python_iterated_prisoners_dilemma")
     parameter_state = game.new_initial_state()
     with self.assertRaises(AssertionError):
-      policy.child(parameter_state, 2)
+      policy.child(parameter_state, 0)
 
 
 if __name__ == "__main__":
+  np.random.seed(SEED)
   absltest.main()

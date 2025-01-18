@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,20 +19,25 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "open_spiel/abseil-cpp/absl/algorithm/container.h"
+#include "open_spiel/abseil-cpp/absl/container/btree_map.h"
+#include "open_spiel/abseil-cpp/absl/random/bit_gen_ref.h"
 #include "open_spiel/abseil-cpp/absl/random/distributions.h"
+#include "open_spiel/abseil-cpp/absl/strings/ascii.h"
 #include "open_spiel/abseil-cpp/absl/strings/match.h"
+#include "open_spiel/abseil-cpp/absl/strings/numbers.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_format.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_join.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_split.h"
-#include "open_spiel/abseil-cpp/absl/types/optional.h"
 #include "open_spiel/abseil-cpp/absl/types/span.h"
 #include "open_spiel/game_parameters.h"
+#include "open_spiel/spiel_globals.h"
 #include "open_spiel/spiel_utils.h"
 #include "open_spiel/utils/usage_logging.h"
 
@@ -122,6 +127,16 @@ StateType State::GetType() const {
   }
 }
 
+std::unique_ptr<State> State::ResampleFromInfostate(
+    int player_id,
+    std::function<double()> rng) const {
+  if (GetGame()->GetType().information ==
+      GameType::Information::kPerfectInformation) {
+    return Clone();
+  }
+  SpielFatalError("ResampleFromInfostate() not implemented.");
+}
+
 bool GameType::ContainsRequiredParameters() const {
   for (const auto& key_val : parameter_specification) {
     if (key_val.second.is_mandatory()) {
@@ -137,6 +152,13 @@ GameRegisterer::GameRegisterer(const GameType& game_type, CreateFunc creator) {
 
 std::shared_ptr<const Game> GameRegisterer::CreateByName(
     const std::string& short_name, const GameParameters& params) {
+  // Check if it's a game with a known issue. If so, output a warning.
+  if (absl::c_linear_search(GamesWithKnownIssues(), short_name)) {
+    std::cerr << "Warning! This game has known issues. Please see the games "
+              << "list on github or the code for details." << std::endl;
+  }
+
+  // Find the factory for this game and load it.
   auto iter = factories().find(short_name);
   if (iter == factories().end()) {
     SpielFatalError(absl::StrCat("Unknown game '", short_name,
@@ -155,6 +177,10 @@ std::vector<std::string> GameRegisterer::RegisteredNames() {
     names.push_back(key_val.first);
   }
   return names;
+}
+
+std::vector<std::string> GameRegisterer::GamesWithKnownIssues() {
+  return {"quoridor", "rbc"};
 }
 
 std::vector<GameType> GameRegisterer::RegisteredGames() {
@@ -191,13 +217,13 @@ std::shared_ptr<const Game> DeserializeGame(const std::string& serialized) {
       absl::StrSplit(serialized, kSerializeGameRNGStateSectionHeader);
 
   // Remove the trailing "\n" from the game section.
-  if (game_and_rng_state.first.length() > 0 &&
+  if (!game_and_rng_state.first.empty() &&
       game_and_rng_state.first.back() == '\n') {
     game_and_rng_state.first.pop_back();
   }
   std::shared_ptr<const Game> game = LoadGame(game_and_rng_state.first);
 
-  if (game_and_rng_state.second.length() > 0) {
+  if (!game_and_rng_state.second.empty()) {
     // Game is implicitly stochastic.
     // Remove the trailing "\n" from the RNG state section.
     if (game_and_rng_state.second.back() == '\n') {
@@ -247,7 +273,7 @@ State::State(std::shared_ptr<const Game> game)
 
 void NormalizePolicy(ActionsAndProbs* policy) {
   const double sum = absl::c_accumulate(
-      *policy, 0.0, [](double& a, auto& b) { return a + b.second; });
+      *policy, 0.0, [](double a, auto& b) { return a + b.second; });
   absl::c_for_each(*policy, [sum](auto& o) { o.second /= sum; });
 }
 
@@ -401,7 +427,7 @@ std::unique_ptr<State> Game::DeserializeState(const std::string& str) const {
                  GameType::Dynamics::kMeanField);
 
   std::unique_ptr<State> state = NewInitialState();
-  if (str.length() == 0) {
+  if (str.empty()) {
     return state;
   }
   std::vector<std::string> lines = absl::StrSplit(str, '\n');
@@ -456,7 +482,7 @@ DeserializeGameAndState(const std::string& serialized_state) {
   Section cur_section = kInvalid;
 
   for (int i = 0; i < lines.size(); ++i) {
-    if (lines[i].length() == 0 || lines[i].at(0) == '#') {
+    if (lines[i].empty() || lines[i].at(0) == '#') {
       // Skip comments and blank lines.
     } else if (lines[i] == kSerializeMetaSectionHeader) {
       SPIEL_CHECK_EQ(cur_section, kInvalid);
@@ -474,11 +500,11 @@ DeserializeGameAndState(const std::string& serialized_state) {
   }
 
   // Remove the trailing "\n" from the game and state sections.
-  if (section_strings[kGame].length() > 0 &&
+  if (!section_strings[kGame].empty() &&
       section_strings[kGame].back() == '\n') {
     section_strings[kGame].pop_back();
   }
-  if (section_strings[kState].length() > 0 &&
+  if (!section_strings[kState].empty() &&
       section_strings[kState].back() == '\n') {
     section_strings[kState].pop_back();
   }
@@ -705,7 +731,7 @@ std::string GameTypeToString(const GameType& game_type) {
 }
 
 GameType GameTypeFromString(const std::string& game_type_str) {
-  std::map<std::string, std::string> game_type_values;
+  absl::btree_map<std::string, std::string> game_type_values;
   std::vector<std::string> parts = absl::StrSplit(game_type_str, '\n');
 
   SPIEL_CHECK_EQ(parts.size(), 15);
@@ -821,6 +847,57 @@ std::string ActionsToString(const State& state,
                             const std::vector<Action>& actions) {
   return absl::StrCat(
       "[", absl::StrJoin(ActionsToStrings(state, actions), ", "), "]");
+}
+
+void SpielFatalErrorWithStateInfo(const std::string& error_msg,
+                                  const Game& game,
+                                  const State& state) {
+  // A fatal error wrapper designed to return useful debugging information.
+  const std::string& info = SerializeGameAndState(game, state);
+  SpielFatalError(absl::StrCat(error_msg, "Serialized state:\n", info));
+}
+
+std::pair<std::shared_ptr<const Game>,
+          std::unique_ptr<State>> BuildStateFromHistoryString(
+    const std::string& game_string,
+    const std::string& history,
+    int max_steps) {
+  std::pair<std::shared_ptr<const Game>, std::unique_ptr<State>> game_and_state;
+  game_and_state.first = LoadGame(game_string);
+  game_and_state.second = game_and_state.first->NewInitialState();
+  std::string history_copy(absl::StripAsciiWhitespace(history));
+  if (history_copy[0] == '[') {
+    history_copy = history_copy.substr(1);
+  }
+  if (history_copy[history_copy.length() - 1] == ']') {
+    history_copy = history_copy.substr(0, history_copy.length() - 1);
+  }
+
+  std::vector<Action> legal_actions;
+  State* state = game_and_state.second.get();
+  int steps = 0;
+  std::vector<std::string> parts = absl::StrSplit(history_copy, ',');
+  for (const std::string& part : parts) {
+    if (max_steps > 0 && steps >= max_steps) {
+      break;
+    }
+    Action action;
+    bool atoi_ret = absl::SimpleAtoi(absl::StripAsciiWhitespace(part), &action);
+    if (!atoi_ret) {
+      SpielFatalError(absl::StrCat("Problem parsing action: ", part));
+    }
+    legal_actions = state->LegalActions();
+    if (absl::c_find(legal_actions, action) == legal_actions.end()) {
+      SpielFatalError(absl::StrCat("Illegal move detected!\nState:\n",
+                                   state->ToString(), "\nAction: ", action,
+                                   " (", state->ActionToString(action), ")\n",
+                                   "History: ", state->HistoryString()));
+    }
+    state->ApplyAction(action);
+    steps++;
+  }
+
+  return game_and_state;
 }
 
 }  // namespace open_spiel

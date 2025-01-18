@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,6 @@
 
 #include "open_spiel/abseil-cpp/absl/algorithm/container.h"
 #include "open_spiel/abseil-cpp/absl/memory/memory.h"
-#include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
 #include "open_spiel/algorithms/expected_returns.h"
 #include "open_spiel/policy.h"
 #include "open_spiel/simultaneous_move_game.h"
@@ -404,7 +403,7 @@ TabularBestResponseMDPInfo TabularBestResponseMDP::Exploitability() {
   TabularBestResponseMDPInfo br_info = ComputeBestResponses();
   br_info.nash_conv = absl::c_accumulate(br_info.br_values, 0.0);
   br_info.exploitability =
-      (br_info.nash_conv - game_.UtilitySum()) / num_players_;
+      (br_info.nash_conv - *game_.UtilitySum()) / num_players_;
   return br_info;
 }
 

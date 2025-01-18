@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,7 +35,14 @@ namespace algorithms {
 //
 // Based on the implementation in Sutton and Barto, Intro to RL. Second Edition,
 // 2018. Section 6.4.
-// Note: current implementation only supports full bootstrapping (lambda = 0).
+//
+// Includes implementation of SARSA(lambda) which can be found in
+// Sutton and Barto, Intro to RL. Second Edition, 2018. Section 12.7.
+// (E.g. https://www.andrew.cmu.edu/course/10-703/textbook/BartoSutton.pdf)
+// Eligibility traces are implemented with the "accumulate"
+// method (+1 at each iteration) instead of "replace" implementation
+// (doesn't sum trace values). Parameter lambda_ determines the level
+// of bootstraping.
 
 class TabularSarsaSolver {
   static inline constexpr double kDefaultDepthLimit = -1;
@@ -77,6 +84,8 @@ class TabularSarsaSolver {
   double lambda_;
   std::mt19937 rng_;
   absl::flat_hash_map<std::pair<std::string, Action>, double> values_;
+  absl::flat_hash_map<std::pair<std::string, Action>, double>
+      eligibility_traces_;
 };
 
 }  // namespace algorithms

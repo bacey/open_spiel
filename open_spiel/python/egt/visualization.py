@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -46,7 +46,7 @@ except ImportError as e:
                "and there is a workaround (run sudo apt install "
                "python-backports.functools-lru-cache. See: "
                "https://github.com/matplotlib/matplotlib/issues/9344.")
-  raise ImportError(str(e))
+  raise ImportError(str(e)) from e
 
 import numpy as np
 
@@ -206,8 +206,8 @@ class SimplexStreamMask(object):
   """
 
   def __init__(self, density=1.):
-    self._n = np.int(30. * density)
-    self._mask = np.zeros([self._n + 1] * 2 + [2], dtype=np.bool)
+    self._n = int(30. * density)
+    self._mask = np.zeros([self._n + 1] * 2 + [2], dtype=bool)
     self.shape = self._mask.shape
 
   def index(self, point):
@@ -386,6 +386,9 @@ class Dynamics3x3Axes(axes.Axes):
     Args:
       points: Points in policy space.
       **kwargs: Additional keyword arguments passed on to `Axes.plot`.
+
+    Returns:
+      The line plot.
     """
     points = np.array(points)
     assert points.shape[1] == 3
@@ -399,6 +402,9 @@ class Dynamics3x3Axes(axes.Axes):
     Args:
       points: Points in policy space.
       **kwargs: Additional keyword arguments passed on to `Axes.scatter`.
+
+    Returns:
+      The scatter plot.
     """
     points = np.array(points)
     assert points.shape[1] == 3
@@ -539,7 +545,7 @@ class Dynamics3x3Axes(axes.Axes):
       p = mask.point(mask.index(p))
       res = self._integrate(p, dynamics, mask, dt=dt)
       if res is not None:
-        t, cells = res
+        t, cells = res  # pylint: disable=unpacking-non-sequence
         cum_len = np.cumsum(
             np.sqrt(
                 np.diff(t[:, 0])**2 + np.diff(t[:, 1])**2 +
@@ -555,7 +561,7 @@ class Dynamics3x3Axes(axes.Axes):
 
     if linewidth == "velocity" or color == "velocity":
       vel_max = 0
-      vel_min = np.float("inf")
+      vel_min = float("inf")
       velocities = []
       for t in trajectories:
         dx = np.apply_along_axis(dynamics, 1, t)

@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,6 +19,7 @@
 #include <random>
 
 #include "open_spiel/abseil-cpp/absl/random/discrete_distribution.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_split.h"
 #include "open_spiel/algorithms/cfr.h"
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_utils.h"
@@ -203,7 +204,7 @@ double OutcomeSamplingMCCFRSolver::SampleEpisode(
   double value_estimate = 0;
   for (int aidx = 0; aidx < legal_actions.size(); ++aidx) {
     value_estimate +=
-        info_state_copy.current_policy[sampled_aidx] * child_values[aidx];
+        info_state_copy.current_policy[aidx] * child_values[aidx];
   }
 
   if (player == update_player) {

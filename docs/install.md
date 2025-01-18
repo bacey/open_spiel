@@ -25,7 +25,7 @@ E.g. on Ubuntu or Debian:
 
 ```bash
 # Check to see if you have the necessary tools for building OpenSpiel:
-cmake --version        # Must be >= 3.12
+cmake --version        # Must be >= 3.17
 clang++ --version      # Must be >= 7.0.0
 python3-config --help
 
@@ -46,7 +46,7 @@ source venv/bin/activate
 
 # Finally, install OpenSpiel and its dependencies:
 python3 -m pip install --upgrade setuptools pip
-python3 -m pip install --no-binary open_spiel
+python3 -m pip install --no-binary=:open_spiel: open_spiel
 
 # To exit the virtual env
 deactivate
@@ -66,22 +66,15 @@ developer tools.
 
 The instructions here are for Linux and MacOS. For installation on Windows, see
 [these separate installation instructions](windows.md). On Linux, we recommend
-Ubuntu 20.04 (or 19.10), Debian 10, or later versions. There are
-[known issues](https://github.com/deepmind/open_spiel/issues/407) with default
-compilers on Ubuntu on 18.04, and `clang-10` must be installed separately. On
-MacOS, we recommend XCode 11 or newer.
+Ubuntu 22.04, Debian 10, or later versions. On MacOS, we recommend XCode 11 or
+newer. For the Python API: our tests run using Python versions 3.7 - 3.10. If
+you encounter any problems on other setups, please let us know by opening an
+issue.
 
-For the Python API: our tests run using Python 3.8 and 3.9 on Ubuntu 20.04 and
-MacOS 10.15. We also test using Ubuntu 18.04 LTS with Python 3.6. So, we
-recommend one of these setups. If you encounter any problems on other setups,
-please let us know by opening an issue.
-
-Currently there are two installation methods:
+Currently there are three installation methods:
 
 1.  building from the source code and editing `PYTHONPATH`.
-2.  using `pip install` to build and testing using
-    [nox](https://nox.thea.codes/en/stable/). A pip package to install directly
-    does not exist yet.
+2.  using `pip install`.
 3.  installing via [Docker](https://www.docker.com).
 
 ## Summary
@@ -93,15 +86,17 @@ In a nutshell:
 ./open_spiel/scripts/build_and_run_tests.sh # Run this every-time you need to rebuild.
 ```
 
-1.  Install system packages (e.g. cmake) and download some dependencies. Only
-    needs to be run once or if you enable some new conditional dependencies (see
-    specific section below).
+1.  (Optional) Configure
+    [Conditional Dependencies](#configuring-conditional-dependencies).
+2.  Install system packages (e.g. cmake) and download some dependencies. Only
+    needs to be run once or if you enable some new conditional dependencies.
 
     ```bash
     ./install.sh
     ```
 
-2.  Install your Python dependencies, e.g. in Python 3 using
+3.  Install your [Python dependencies](#installing-python-dependencies), e.g. in
+    Python 3 using
     [`virtualenv`](https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/):
 
     ```bash
@@ -113,7 +108,7 @@ In a nutshell:
 
     `pip` should be installed once and upgraded:
 
-    ```
+    ```bash
     curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
     # Install pip deps as your user. Do not use the system's pip.
     python3 get-pip.py
@@ -121,12 +116,18 @@ In a nutshell:
     pip3 install --upgrade setuptools testresources
     ```
 
-3.  This sections differs depending on the installation procedure:
+    Additionally, if you intend to use one of the optional Python dependencies
+    (see [open_spiel/scripts/install.sh](https://github.com/deepmind/open_spiel/blob/master/open_spiel/scripts/install.sh)), you must manually
+    install and/or upgrade them, e.g.: `bash pip install --upgrade torch==x.xx.x
+    jax==x.x.x` where `x.xx.x` should be the desired version numbers (which can
+    be found at the link above).
+
+4.  This sections differs depending on the installation procedure:
 
     **Building and testing from source**
 
     ```bash
-    pip3 install -r requirements.txt
+    python3 -m pip install -r requirements.txt
     ./open_spiel/scripts/build_and_run_tests.sh
     ```
 
@@ -134,8 +135,6 @@ In a nutshell:
 
     ```bash
     python3 -m pip install .
-    pip install nox
-    nox -s tests
     ```
 
     Optionally, use `pip install -e` to install in
@@ -144,7 +143,7 @@ In a nutshell:
     source files. If you edit any C++ files, you will have to rerun the install
     command.
 
-4.  Only when building from source:
+5.  Only when building from source:
 
     ```bash
     # For the python modules in open_spiel.
@@ -153,8 +152,8 @@ In a nutshell:
     export PYTHONPATH=$PYTHONPATH:/<path_to_open_spiel>/build/python
     ```
 
-    to `./venv/bin/activate` or your `~/.bashrc` to be able to import OpenSpiel
-    from anywhere.
+    add it to `./venv/bin/activate` or your `~/.bashrc` to be able to import
+    OpenSpiel from anywhere.
 
 To make sure OpenSpiel works on the default configurations, we do use the
 `python3` command and not `python` (which still defaults to Python 2 on modern
@@ -163,9 +162,8 @@ Linux versions).
 ## Installing via Docker
 
 Please note that we don't regularly test the Docker installation. As such, it
-may not work at any given time. We are investigating enabling tests and proper
-longer-term support, but it may take some time. Until then, if you encounter a
-problem, please [open an issue](https://github.com/deepmind/open_spiel/issues).
+may not work at any given time. If you encounter a problem, please
+[open an issue](https://github.com/deepmind/open_spiel/issues).
 
 Option 1 (Basic, 3.13GB):
 
@@ -220,7 +218,7 @@ Once the proper Python paths are set, from the main directory (one above
 
 ```bash
 # Similar to the C++ example:
-python3 open_spiel/python/examples/example.py --game=breakthrough
+python3 open_spiel/python/examples/example.py --game_string=breakthrough
 
 # Play a game against a random or MCTS bot:
 python3 open_spiel/python/examples/mcts.py --game=tic_tac_toe --player1=human --player2=random
@@ -229,10 +227,20 @@ python3 open_spiel/python/examples/mcts.py --game=tic_tac_toe --player1=human --
 
 ## Detailed steps
 
-### Configuration conditional dependencies
+### Configuring conditional dependencies
 
-See [open_spiel/scripts/global_variables.sh](https://github.com/deepmind/open_spiel/blob/master/open_spiel/scripts/global_variables.sh) to configure the
-conditional dependencies. See also the [Developer Guide](developer_guide.md).
+Conditional dependencies are configured using environment variables, e.g.
+
+```bash
+export OPEN_SPIEL_BUILD_WITH_HANABI=ON
+```
+
+`install.sh` may need to be rerun after enabling new conditional dependencies.
+
+See [open_spiel/scripts/global_variables.sh](https://github.com/deepmind/open_spiel/blob/master/open_spiel/scripts/global_variables.sh) for the full list
+of conditional dependencies.
+
+See also the [Developer Guide](developer_guide.md#conditional-dependencies).
 
 ### Installing system-wide dependencies
 
@@ -245,20 +253,38 @@ Using a `virtualenv` to install python dependencies is highly recommended. For
 more information see:
 [https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/](https://packaging.python.org/guides/installing-using-pip-and-virtual-environments/)
 
-Install dependencies (Python 3):
+##### Required dependencies
+
+Install required dependencies (Python 3):
 
 ```bash
+# Ubuntu 22.04 and newer:
+python3 -m venv ./venv
+source venv/bin/activate
+python3 -m pip install -r requirements.txt
+# Older than Ubuntu 22.04:
 virtualenv -p python3 venv
 source venv/bin/activate
-pip3 install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
 Alternatively, although not recommended, you can install the Python dependencies
 system-wide with:
 
 ```bash
-pip3 install --upgrade -r requirements.txt
+python3 -m pip install --upgrade -r requirements.txt
 ```
+
+##### Optional dependencies
+
+Additionally, if you intend to use one of the optional Python dependencies (see [open_spiel/scripts/install.sh](https://github.com/deepmind/open_spiel/blob/master/open_spiel/scripts/install.sh)), you must manually install and/or upgrade them. The installation scripts will not install or upgrade these dependencies. e.g.:
+
+```bash
+python3 -m pip install --upgrade torch==x.xx.x jax==x.x.x
+```
+
+where `x.xx.x` should be the desired version numbers (which can be found at the
+link above).
 
 ### Building and running tests
 
@@ -279,7 +305,7 @@ ctest -j$(nproc)
 
 The CMake variable `Python3_EXECUTABLE` is used to specify the Python
 interpreter. If the variable is not set, CMake's FindPython3 module will prefer
-the latest version installed. Note, Python >= 3.6.0 is required.
+the latest version installed. Note, Python >= 3.7 is required.
 
 One can run an example of a game running (in the `build/` folder):
 
@@ -294,7 +320,7 @@ rest) from any location, you will need to add to your PYTHONPATH the root
 directory and the `open_spiel` directory.
 
 When using a virtualenv, the following should be added to
-`<virtualenv>/bin/activate`. For a system-wide install, ddd it in your `.bashrc`
+`<virtualenv>/bin/activate`. For a system-wide install, add it in your `.bashrc`
 or `.profile`.
 
 ```bash

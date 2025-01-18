@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -88,7 +88,8 @@ std::map<std::string, double> ValueIteration(const Game& game, int depth_limit,
                  GameType::Information::kPerfectInformation);
 
   auto states = GetAllStates(game, depth_limit, /*include_terminals=*/true,
-                             /*include_chance_states=*/false);
+                             /*include_chance_states=*/false,
+                             /*stop_at_duplicates*/true);
   std::map<std::string, double> values;
   std::map<state_action, std::vector<state_prob>> transitions;
 

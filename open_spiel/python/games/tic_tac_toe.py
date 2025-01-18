@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,10 +21,10 @@ game in Python.
 Python games are significantly slower than C++, but it may still be suitable
 for prototyping or for small games.
 
-It is possible to run C++ algorithms on Python implemented games, This is likely
+It is possible to run C++ algorithms on Python-implemented games. This is likely
 to have good performance if the algorithm simply extracts a game tree and then
 works with that (e.g. CFR algorithms). It is likely to be poor if the algorithm
-relies on processing and updating states as it goes, e.g. MCTS.
+relies on processing and updating states as it goes, e.g., MCTS.
 """
 
 import numpy as np

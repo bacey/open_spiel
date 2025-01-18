@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,10 +22,8 @@
 #include <set>
 #include <string>
 
-#include "open_spiel/abseil-cpp/absl/random/uniform_int_distribution.h"
-#include "open_spiel/abseil-cpp/absl/time/clock.h"
+#include "open_spiel/abseil-cpp/absl/container/btree_set.h"
 #include "open_spiel/abseil-cpp/absl/types/optional.h"
-#include "open_spiel/game_transforms/turn_based_simultaneous_game.h"
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_globals.h"
 #include "open_spiel/spiel_utils.h"
@@ -37,7 +35,7 @@ namespace {
 
 constexpr int kInvalidHistoryPlayer = -300;
 constexpr int kInvalidHistoryAction = -301;
-constexpr double kUtilitySumTolerance = 1e-9;
+constexpr double kRewardEpsilon = 1e-9;
 
 // Information about the simulation history. Used to track past states and
 // actions for rolling back simulations via UndoAction, and check History.
@@ -189,25 +187,28 @@ void TestHistoryContainsActions(const Game& game,
 void CheckReturnsSum(const Game& game, const State& state) {
   std::vector<double> returns = state.Returns();
   double rsum = std::accumulate(returns.begin(), returns.end(), 0.0);
+  absl::optional<double> utility_sum = game.UtilitySum();
 
   switch (game.GetType().utility) {
     case GameType::Utility::kZeroSum: {
-      SPIEL_CHECK_TRUE(Near(rsum, 0.0, kUtilitySumTolerance));
+      SPIEL_CHECK_EQ(utility_sum, 0.0);
+      SPIEL_CHECK_TRUE(Near(rsum, 0.0, kRewardEpsilon));
       break;
     }
     case GameType::Utility::kConstantSum: {
-      SPIEL_CHECK_TRUE(Near(rsum, game.UtilitySum(), kUtilitySumTolerance));
+      SPIEL_CHECK_TRUE(utility_sum.has_value());
+      SPIEL_CHECK_FLOAT_NEAR(rsum, *utility_sum, kRewardEpsilon);
       break;
     }
     case GameType::Utility::kIdentical: {
+      SPIEL_CHECK_FALSE(utility_sum.has_value());
       for (int i = 1; i < returns.size(); ++i) {
-        SPIEL_CHECK_TRUE(
-            Near(returns[i], returns[i - 1], kUtilitySumTolerance));
+        SPIEL_CHECK_TRUE(Near(returns[i], returns[i - 1], kRewardEpsilon));
       }
       break;
     }
     case GameType::Utility::kGeneralSum: {
-      break;
+      SPIEL_CHECK_FALSE(utility_sum.has_value());
     }
   }
 }
@@ -252,6 +253,31 @@ void CheckObservables(const Game& game,
       if (observation->HasString()) observation->StringFrom(state, p);
       if (observation->HasTensor()) observation->SetFrom(state, p);
     }
+  }
+}
+
+void CheckActionStringsAreUniqueForPlayer(const Game& game, State& state,
+                                          Player player) {
+  absl::flat_hash_set<std::string> action_strings;
+  for (Action action : state.LegalActions(player)) {
+    const auto action_str = state.ActionToString(player, action);
+    const auto& [unused, was_inserted] = action_strings.insert(action_str);
+    SPIEL_CHECK_TRUE_WSI(
+        was_inserted,
+        absl::StrCat("Duplicate action string '", action_str, "' in state"),
+        game, state);
+  }
+}
+
+void CheckActionStringsAreUnique(const Game& game, State& state) {
+  if (state.IsTerminal() || state.IsMeanFieldNode()) return;
+  if (state.IsSimultaneousNode()) {
+    for (int player = 0; player < game.NumPlayers(); ++player) {
+      CheckActionStringsAreUniqueForPlayer(game, state, player);
+    }
+  } else{
+    // Also works for chance node.
+    CheckActionStringsAreUniqueForPlayer(game, state, state.CurrentPlayer());
   }
 }
 
@@ -327,6 +353,7 @@ void RandomSimulation(std::mt19937* rng, const Game& game, bool undo,
 
     LegalActionsIsEmptyForOtherPlayers(game, *state);
     CheckLegalActionsAreSorted(game, *state);
+    CheckActionStringsAreUnique(game, *state);
 
     // Test cloning the state.
     std::unique_ptr<open_spiel::State> state_copy = state->Clone();
@@ -364,12 +391,20 @@ void RandomSimulation(std::mt19937* rng, const Game& game, bool undo,
       num_moves++;
     } else if (state->CurrentPlayer() == open_spiel::kSimultaneousPlayerId) {
       std::vector<double> rewards = state->Rewards();
+      std::vector<double> returns = state->Returns();
       SPIEL_CHECK_EQ(rewards.size(), game.NumPlayers());
-      if (verbose) {
-        std::cout << "Rewards: " << absl::StrJoin(rewards, " ") << std::endl;
-      }
+      SPIEL_CHECK_EQ(returns.size(), game.NumPlayers());
       for (auto p = Player{0}; p < game.NumPlayers(); ++p) {
         episode_returns[p] += rewards[p];
+      }
+      if (verbose) {
+        std::cout << "Rewards: " << absl::StrJoin(rewards, " ") << std::endl;
+        std::cout << "Returns: " << absl::StrJoin(returns, " ") << std::endl;
+        std::cout << "Sum Rewards: " << absl::StrJoin(episode_returns, " ")
+                  << std::endl;
+      }
+      for (auto p = Player{0}; p < game.NumPlayers(); ++p) {
+        SPIEL_CHECK_TRUE(Near(episode_returns[p], returns[p], kRewardEpsilon));
       }
 
       // Players choose simultaneously.
@@ -404,12 +439,20 @@ void RandomSimulation(std::mt19937* rng, const Game& game, bool undo,
       state->UpdateDistribution(RandomDistribution(support.size(), rng));
     } else {
       std::vector<double> rewards = state->Rewards();
+      std::vector<double> returns = state->Returns();
       SPIEL_CHECK_EQ(rewards.size(), game.NumPlayers());
-      if (verbose) {
-        std::cout << "Rewards: " << absl::StrJoin(rewards, " ") << std::endl;
-      }
+      SPIEL_CHECK_EQ(returns.size(), game.NumPlayers());
       for (auto p = Player{0}; p < game.NumPlayers(); ++p) {
         episode_returns[p] += rewards[p];
+      }
+      if (verbose) {
+        std::cout << "Rewards: " << absl::StrJoin(rewards, " ") << std::endl;
+        std::cout << "Returns: " << absl::StrJoin(returns, " ") << std::endl;
+        std::cout << "Sum Rewards: " << absl::StrJoin(episode_returns, " ")
+                  << std::endl;
+      }
+      for (auto p = Player{0}; p < game.NumPlayers(); ++p) {
+        SPIEL_CHECK_TRUE(Near(episode_returns[p], returns[p], kRewardEpsilon));
       }
 
       // Decision node.
@@ -491,7 +534,8 @@ void RandomSimulation(std::mt19937* rng, const Game& game, bool undo,
 void RandomSimTest(const Game& game, int num_sims, bool serialize, bool verbose,
                    bool mask_test,
                    const std::function<void(const State&)>& state_checker_fn,
-                   int mean_field_population) {
+                   int mean_field_population,
+                   std::shared_ptr<Observer> observer) {
   std::mt19937 rng;
   if (verbose) {
     std::cout << "\nRandomSimTest, game = " << game.GetType().short_name
@@ -499,7 +543,7 @@ void RandomSimTest(const Game& game, int num_sims, bool serialize, bool verbose,
   }
   for (int sim = 0; sim < num_sims; ++sim) {
     RandomSimulation(&rng, game, /*undo=*/false, /*serialize=*/serialize,
-                     verbose, mask_test, nullptr, state_checker_fn,
+                     verbose, mask_test, observer, state_checker_fn,
                      mean_field_population);
   }
 }
@@ -565,8 +609,8 @@ void CheckChanceOutcomes(const State& state) {
           "\nLegalActions(kChancePlayerId): ",
           absl::StrJoin(legal_actions, ", ")));
     }
-    std::set<Action> legal_action_set(legal_actions.begin(),
-                                      legal_actions.end());
+    absl::btree_set<Action> legal_action_set(legal_actions.begin(),
+                                             legal_actions.end());
     auto chance_outcomes = state.ChanceOutcomes();
 
     std::vector<Action> chance_outcome_actions;
@@ -586,8 +630,8 @@ void CheckChanceOutcomes(const State& state) {
       }
       sum += prob;
     }
-    std::set<Action> chance_outcome_actions_set(chance_outcome_actions.begin(),
-                                                chance_outcome_actions.end());
+    absl::btree_set<Action> chance_outcome_actions_set(
+        chance_outcome_actions.begin(), chance_outcome_actions.end());
     if (chance_outcome_actions.size() != chance_outcome_actions_set.size()) {
       std::sort(chance_outcome_actions.begin(), chance_outcome_actions.end());
       SpielFatalError(absl::StrCat(

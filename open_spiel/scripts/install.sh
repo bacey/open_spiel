@@ -25,7 +25,31 @@ die() {
 set -e  # exit when any command fails
 set -x  # show evaluation trace
 
+PYBIN="python3"
+if [[ "$1" != "" ]]; then
+  PYBIN=$1
+fi
+${PYBIN} --version
+
 MYDIR="$(dirname "$(realpath "$0")")"
+
+# This function is only run on Github Actions!
+function ci_check_install_python() {
+  if [[ ! "$CI" ]]; then
+    echo "Only run this function on Github Actions!"
+    exit 1
+  fi
+
+  # Need the trap here to make sure the return value of grep being 1 doesn't cause set -e to fail
+  # https://stackoverflow.com/questions/77047127/bash-capture-stderr-of-a-function-while-using-trap
+  trap 'ret=0; output=$(brew list --versions | grep "python ${OS_PYTHON_VERSION}") || ret="$?"; trap - RETURN' RETURN
+  if [[ "$output" = "" ]]; then
+    # The --force is needed because there seems to be a phantom installation in /usr/local/
+    # and errors show up for files that already exist
+    brew install --force "python@${OS_PYTHON_VERSION}"
+  fi
+  return 0
+}
 
 # Calling this file from the project root is not allowed,
 # as all the paths here are hard-coded to be relative to it.
@@ -107,13 +131,21 @@ fi
 
 DIR="open_spiel/abseil-cpp"
 if [[ ! -d ${DIR} ]]; then
-  cached_clone -b '20200923.3' --single-branch --depth 1 https://github.com/abseil/abseil-cpp.git open_spiel/abseil-cpp
+  cached_clone -b '20230125.0' --single-branch --depth 1 https://github.com/abseil/abseil-cpp.git ${DIR}
+fi
+
+DIR="open_spiel/pybind11_abseil"
+if [[ ! -d ${DIR} ]]; then
+  cached_clone -b 'master' https://github.com/pybind/pybind11_abseil.git ${DIR}
+  pushd ${DIR}
+  git checkout '73992b5'
+  popd
 fi
 
 # Optional dependencies.
 DIR="open_spiel/games/hanabi/hanabi-learning-environment"
 if [[ ${OPEN_SPIEL_BUILD_WITH_HANABI:-"ON"} == "ON" ]] && [[ ! -d ${DIR} ]]; then
-  cached_clone -b 'master' --single-branch --depth 15 https://github.com/deepmind/hanabi-learning-environment.git ${DIR}
+  cached_clone -b 'master' https://github.com/deepmind/hanabi-learning-environment.git ${DIR}
   # We checkout a specific CL to prevent future breakage due to changes upstream
   # The repository is very infrequently updated, thus the last 15 commits should
   # be ok for a long time.
@@ -128,13 +160,6 @@ fi
 DIR="open_spiel/games/universal_poker/acpc"
 if [[ ${OPEN_SPIEL_BUILD_WITH_ACPC:-"ON"} == "ON" ]] && [[ ! -d ${DIR} ]]; then
   cached_clone -b 'master' --single-branch --depth 1  https://github.com/jblespiau/project_acpc_server.git ${DIR}
-fi
-
-# Add EIGEN template library for linear algebra.
-# http://eigen.tuxfamily.org/index.php?title=Main_Page
-DIR="open_spiel/eigen/libeigen"
-if [[ ${OPEN_SPIEL_BUILD_WITH_EIGEN:-"ON"} == "ON" ]] && [[ ! -d ${DIR} ]]; then
-  cached_clone -b '3.3.7' --single-branch --depth 1  https://gitlab.com/libeigen/eigen.git ${DIR}
 fi
 
 # This GitHub repository contains Nathan Sturtevant's state of the art
@@ -221,9 +246,27 @@ fi
 
 # Install other system-wide packages.
 if [[ "$OSTYPE" == "linux-gnu" ]]; then
-  EXT_DEPS="virtualenv clang cmake curl python3 python3-dev python3-pip python3-setuptools python3-wheel python3-tk"
+  PYTHON_PKGS="python3-dev python3-pip python3-setuptools python3-wheel python3-tk python3-venv"
+  if [[ "$OS_PYTHON_VERSION" == "3.11" ]]; then
+    # Need to special-case this until it's installed by default.
+    # https://vegastack.com/tutorials/how-to-install-python-3-11-on-ubuntu-22-04/
+    echo "Adding Python 3.11 ppa repos"
+    sudo add-apt-repository ppa:deadsnakes/ppa
+    PYTHON_PKGS="python3.11 python3.11-dev python3-pip python3-setuptools python3-wheel python3-tk python3.11-venv"
+  elif [[ "$OS_PYTHON_VERSION" == "3.12" ]]; then
+    # Need to special-case this until it's installed by default.
+    # https://ubuntuhandbook.org/index.php/2023/05/install-python-3-12-ubuntu/
+    # No longer need to add the ppa repos on Ubuntu 24.04 runner
+    # echo "Adding Python 3.12 ppa repos"
+    # sudo add-apt-repository ppa:deadsnakes/ppa
+    PYTHON_PKGS="python3.12 python3.12-dev python3-pip python3-setuptools python3-wheel python3-tk python3.12-venv"
+  fi
+  EXT_DEPS="virtualenv clang cmake curl $PYTHON_PKGS"
   if [[ ${OPEN_SPIEL_BUILD_WITH_GO:-"OFF"} == "ON" ]]; then
     EXT_DEPS="${EXT_DEPS} golang"
+  fi
+  if [[ ${OPEN_SPIEL_BUILD_WITH_RUST:-"OFF"} == "ON" ]]; then
+    EXT_DEPS="${EXT_DEPS} rustc cargo"
   fi
 
   APT_GET=`which apt-get`
@@ -246,6 +289,11 @@ if [[ "$OSTYPE" == "linux-gnu" ]]; then
     sudo apt-get -y update
     sudo apt-get -y install $EXT_DEPS
   fi
+  if [[ ${OPEN_SPIEL_BUILD_WITH_RUST:-"OFF"} == "ON" ]]; then
+    if [[ ! -f $HOME/.cargo/bin/bindgen ]]; then
+      cargo install bindgen-cli
+    fi
+  fi
 
   if [[ "$TRAVIS" ]]; then
     sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${OS_PYTHON_VERSION} 10
@@ -255,11 +303,11 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then  # Mac OSX
   [[ -x `which realpath` ]] || brew install coreutils || echo "** Warning: failed 'brew install coreutils' -- continuing"
   [[ -x `which cmake` ]] || brew install cmake || echo "** Warning: failed 'brew install cmake' -- continuing"
   [[ -x `which python3` ]] || brew install python3 || echo "** Warning: failed 'brew install python3' -- continuing"
-  # On Github Actions, macOS 10.15 comes with Python 3.9.
+  # On Github Actions, macOS comes with Python 3.9.
   # We want to test multiple Python versions determined by OS_PYTHON_VERSION.
-  if [[ "$CI" && "${OS_PYTHON_VERSION}" != "3.9" ]]; then
-    brew install "python@${OS_PYTHON_VERSION}"
-    brew unlink python@3.9
+  if [[ "$CI" ]]; then
+    # Set brew to use the specific python version
+    ci_check_install_python
     brew link --force --overwrite "python@${OS_PYTHON_VERSION}"
   fi
   `python3 -c "import tkinter" > /dev/null 2>&1` || brew install tcl-tk || echo "** Warning: failed 'brew install tcl-tk' -- continuing"
@@ -269,10 +317,15 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then  # Mac OSX
   if [[ ${OPEN_SPIEL_BUILD_WITH_GO:-"OFF"} == "ON" ]]; then
     [[ -x `which go` ]] || brew install golang || echo "** Warning: failed 'brew install golang' -- continuing"
   fi
-
-  curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-  python3 get-pip.py
-  pip3 install virtualenv
+  if [[ ${OPEN_SPIEL_BUILD_WITH_RUST:-"OFF"} == "ON" ]]; then
+    [[ -x `which rustc` ]] || brew install rust || echo "** Warning: failed 'brew install rust' -- continuing"
+    if [[ ! -f $HOME/.cargo/bin/bindgen ]]; then
+      cargo install bindgen-cli
+    fi
+  fi
+  # Removed getting pip via git-pip.py. See #1200.
+  brew install virtualenv   # May be the required way to do this as of Python 3.12?
+  # ${PYBIN} -m pip install virtualenv
 else
   echo "The OS '$OSTYPE' is not supported (Only Linux and MacOS is). " \
        "Feel free to contribute the install for a new OS."

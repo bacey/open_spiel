@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Abstract class for meta trainers (Generalized PSRO, RNR, ...)
 
 Meta-algorithm with modular behaviour, allowing implementation of PSRO, RNR, and
@@ -48,11 +47,12 @@ def _process_string_or_callable(string_or_callable, dictionary):
 
   try:
     return dictionary[string_or_callable]
-  except KeyError:
+  except KeyError as e:
     raise NotImplementedError("Input type / value not supported. Accepted types"
                               ": string, callable. Acceptable string values : "
                               "{}. Input provided : {}".format(
-                                  list(dictionary.keys()), string_or_callable))
+                                  list(dictionary.keys()),
+                                  string_or_callable)) from e
 
 
 def sample_episode(state, policies):
@@ -227,20 +227,22 @@ class AbstractMetaTrainer(object):
     """Returns the Nash Equilibrium distribution on meta game matrix."""
     meta_strategy_probabilities = self._meta_strategy_probabilities
     if self.symmetric_game:
-      meta_strategy_probabilities = self._game_num_players * meta_strategy_probabilities
+      meta_strategy_probabilities = (self._game_num_players *
+                                     meta_strategy_probabilities)
     return [np.copy(a) for a in meta_strategy_probabilities]
 
   def get_meta_game(self):
     """Returns the meta game matrix."""
     meta_games = self._meta_games
-    if self.symmetric_game:
-      meta_games = self._game_num_players * meta_games
     return [np.copy(a) for a in meta_games]
 
   def get_policies(self):
     """Returns the players' policies."""
     policies = self._policies
     if self.symmetric_game:
+      # Notice that the following line returns N references to the same policy
+      # This might not be correct for certain applications.
+      # E.g., a DQN BR oracle with player_id information
       policies = self._game_num_players * policies
     return policies
 

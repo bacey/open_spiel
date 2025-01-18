@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,13 +28,13 @@ class IteratedPrisonersDilemmaTest(absltest.TestCase):
     self.assertEqual(game._termination_probability, 0.125)
 
   def test_non_default_param_from_string(self):
-    """Check the game can be converted to a turn-based game."""
+    """Check params can be given through the string loading."""
     game = pyspiel.load_game(
         "python_iterated_prisoners_dilemma(termination_probability=0.5)")
     self.assertEqual(game._termination_probability, 0.5)
 
   def test_non_default_param_from_dict(self):
-    """Check the game can be converted to a turn-based game."""
+    """Check params can be given through a dictionary."""
     game = pyspiel.load_game("python_iterated_prisoners_dilemma",
                              {"termination_probability": 0.75})
     self.assertEqual(game._termination_probability, 0.75)

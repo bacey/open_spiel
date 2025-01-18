@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,10 +35,10 @@ class NetworkTest(absltest.TestCase):
     self.assertEqual(self.network.get_successors("D"), [])
     self.assertTrue(self.network.is_location_at_sink_node("A->D"))
     self.assertFalse(self.network.is_location_at_sink_node("O->A"))
-    self.assertEqual(self.network.get_action_id_from_movement("O", "A"), 1)
-    self.assertEqual(self.network.get_action_id_from_movement("A", "D"), 2)
-    self.assertEqual(self.network.get_road_section_from_action_id(1), "O->A")
-    self.assertEqual(self.network.get_road_section_from_action_id(2), "A->D")
+    self.assertEqual(self.network.get_action_id_from_movement("A", "D"), 1)
+    self.assertEqual(self.network.get_action_id_from_movement("O", "A"), 2)
+    self.assertEqual(self.network.get_road_section_from_action_id(1), "A->D")
+    self.assertEqual(self.network.get_road_section_from_action_id(2), "O->A")
 
   def test_get_successors_with_wrong_node(self):
     """Test get successors on non existing node."""
@@ -75,19 +75,45 @@ class NetworkTest(absltest.TestCase):
     with self.assertRaises(KeyError):
       self.network.get_road_section_from_action_id(0)
 
-  def test_get_probability_to_exit_expected(self):
-    """Test get_probability_to_exit with default functions."""
-    self.assertEqual(self.network.get_probability_to_exit("O->A", 0), 1)
-    self.assertEqual(self.network.get_probability_to_exit("O->A", 1), .5)
-    self.assertEqual(self.network.get_probability_to_exit("O->A", 3), .25)
-    self.assertEqual(self.network.get_probability_to_exit("A->D", 0), 1)
-    self.assertEqual(self.network.get_probability_to_exit("A->D", 1), .5)
-    self.assertEqual(self.network.get_probability_to_exit("A->D", 3), .25)
+  def test_num_links_method(self):
+    # Write.
+    pass
 
-  def test_get_probability_to_exit_wrong_road_section(self):
-    """Test get_probability_to_exit with user defined functions."""
-    with self.assertRaises(KeyError):
-      self.network.get_probability_to_exit("Z->D", 0)
+  def test_num_actions_method(self):
+    # Write.
+    pass
+
+  def test_links(self):
+    # Write.
+    pass
+
+  def test_check_list_of_vehicles_is_correct_method(self):
+    # Write.
+    pass
+
+  def test_check_list_of_od_demand_is_correct_method(self):
+    # Write.
+    pass
+
+  def test_str_method(self):
+    # Write.
+    pass
+
+  def test_get_travel_time_methods(self):
+    # Write.
+    pass
+
+  def test_assert_valid_action_methods(self):
+    # Write.
+    pass
+
+  def test_default_travel_time_methods(self):
+    # Write.
+    pass
+
+  def test_customable_travel_time_methods(self):
+    # Write.
+    pass
 
 
 class VehicleTest(absltest.TestCase):

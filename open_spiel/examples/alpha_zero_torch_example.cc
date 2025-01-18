@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,11 +13,16 @@
 // limitations under the License.
 
 #include <signal.h>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 #include "open_spiel/abseil-cpp/absl/flags/flag.h"
 #include "open_spiel/abseil-cpp/absl/flags/parse.h"
 #include "open_spiel/algorithms/alpha_zero_torch/alpha_zero.h"
+#include "open_spiel/spiel_utils.h"
 #include "open_spiel/utils/file.h"
+#include "open_spiel/utils/init.h"
 #include "open_spiel/utils/json.h"
 #include "open_spiel/utils/thread.h"
 
@@ -27,7 +32,7 @@ ABSL_FLAG(std::string, graph_def, "",
           ("Where to get the graph. This could be from export_model.py, or "
            "from a checkpoint. If this is empty it'll create one."));
 ABSL_FLAG(std::string, nn_model, "resnet",
-          "Model torso type, currently only resnet is available.");
+          "Model torso type, can be resnet or mlp.");
 ABSL_FLAG(int, nn_width, 128, "Width of the model, passed to export_model.py.");
 ABSL_FLAG(int, nn_depth, 10, "Depth of the model, passed to export_model.py.");
 ABSL_FLAG(double, uct_c, 2, "UCT exploration constant.");
@@ -97,6 +102,8 @@ void signal_installer() {
 }
 
 int main(int argc, char** argv) {
+  open_spiel::Init("", &argc, &argv, true);
+
   std::vector<char*> positional_args = absl::ParseCommandLine(argc, argv);
   signal_installer();
 

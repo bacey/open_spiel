@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,19 +28,24 @@ of units, except for the last connection. Before the last hidden layer
 a layer normalization is applied.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import collections
 import contextlib
 import os
 import random
+import warnings
+
 import numpy as np
 import tensorflow as tf
 
 from open_spiel.python import policy
 import pyspiel
+
+
+warnings.warn(
+    'Deep CFR TF2 has known issues when using Keras 3 and may be removed '
+    'in a future version unless fixed. See OpenSpiel github issue #1208 '
+    'for details.'
+)
 
 
 # The size of the shuffle buffer used to reshuffle part of the data each
@@ -562,7 +567,8 @@ class DeepCFRSolver(policy.Policy):
       return state.returns()[player]
     elif state.is_chance_node():
       # If this is a chance node, sample an action
-      action = np.random.choice([i[0] for i in state.chance_outcomes()])
+      chance_outcome, chance_proba = zip(*state.chance_outcomes())
+      action = np.random.choice(chance_outcome, p=chance_proba)
       return self._traverse_game_tree(state.child(action), player)
     elif state.current_player() == player:
       # Update the policy over the info set & actions via regret matching.
@@ -625,8 +631,9 @@ class DeepCFRSolver(policy.Policy):
         info_state, legal_actions_mask, player)
     return advantages.numpy(), matched_regrets.numpy()
 
-  def action_probabilities(self, state):
+  def action_probabilities(self, state, player_id=None):
     """Returns action probabilities dict for a single batch."""
+    del player_id  # unused
     cur_player = state.current_player()
     legal_actions = state.legal_actions(cur_player)
     legal_actions_mask = tf.constant(

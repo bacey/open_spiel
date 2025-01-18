@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,10 +13,6 @@
 # limitations under the License.
 
 """Example use of the RCFR algorithm on Kuhn Poker."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 from absl import app
 from absl import flags
@@ -91,14 +87,21 @@ def main(_):
     data = data.batch(FLAGS.batch_size)
     data = data.repeat(FLAGS.num_epochs)
 
-    optimizer = tf.keras.optimizers.Adam(lr=FLAGS.step_size, amsgrad=True)
+    optimizer = tf.keras.optimizers.Adam(
+        learning_rate=FLAGS.step_size, amsgrad=True
+    )
 
     @tf.function
     def _train():
       for x, y in data:
-        optimizer.minimize(
-            lambda: tf.losses.huber_loss(y, model(x), delta=0.01),  # pylint: disable=cell-var-from-loop
-            model.trainable_variables)
+        with tf.GradientTape() as tape:
+          loss = tf.losses.huber_loss(y, model(x), delta=0.01)
+        optimizer.apply_gradients(
+            zip(
+                tape.gradient(loss, model.trainable_variables),
+                model.trainable_variables,
+            )
+        )
 
     _train()
 

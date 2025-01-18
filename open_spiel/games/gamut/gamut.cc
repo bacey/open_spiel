@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2019 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,18 +14,14 @@
 
 #include "open_spiel/games/gamut/gamut.h"
 
-#include <algorithm>
-#include <cstring>
-#include <ctime>
-#include <fstream>
-#include <iostream>
+#include <memory>
 #include <random>
 #include <string>
 
 #include "open_spiel/abseil-cpp/absl/algorithm/container.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_join.h"
-#include "open_spiel/games/nfg_game.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_split.h"
 #include "open_spiel/spiel_utils.h"
 #include "open_spiel/utils/file.h"
 
@@ -46,7 +42,7 @@ GamutGenerator::GamutGenerator(const std::string& java_path,
                                const std::string& jar_path, int tmpfile_seed)
     : java_path_(java_path),
       jar_path_(jar_path),
-      rng_(tmpfile_seed == 0 ? time(nullptr) : tmpfile_seed),
+      rng_(tmpfile_seed == 0 ? std::random_device{}() : tmpfile_seed),
       rand_string_(kAlphaChars) {}
 
 std::shared_ptr<const Game> GamutGenerator::GenerateGame(
@@ -96,11 +92,27 @@ std::shared_ptr<const Game> GamutGenerator::GenerateGame(
     arguments.push_back(tmp_filename);
     std::string full_cmd = absl::StrCat(java_path_, " -jar ", jar_path_, " ",
                                         absl::StrJoin(arguments, " "));
-    system(full_cmd.c_str());
+    int ret_code = system(full_cmd.c_str());
+    SPIEL_CHECK_EQ(ret_code, 0);
+    SPIEL_CHECK_TRUE(file::Exists(tmp_filename));
     game = LoadGame("nfg_game", {{"filename", GameParameter(tmp_filename)}});
     file::Remove(tmp_filename);
   }
   return game;
+}
+
+std::shared_ptr<const matrix_game::MatrixGame>
+GamutGenerator::GenerateMatrixGame(
+    const std::vector<std::string>& cmdline_args) {
+  return std::dynamic_pointer_cast<const matrix_game::MatrixGame>(
+      GenerateGame(cmdline_args));
+}
+
+std::shared_ptr<const tensor_game::TensorGame>
+GamutGenerator::GenerateTensorGame(
+    const std::vector<std::string>& cmdline_args) {
+  return std::dynamic_pointer_cast<const tensor_game::TensorGame>(
+      GenerateGame(cmdline_args));
 }
 
 }  // namespace gamut

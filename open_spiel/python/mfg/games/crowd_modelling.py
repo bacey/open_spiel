@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,7 +25,7 @@ to the game in section 4.2.
 from typing import Any, List, Mapping
 import numpy as np
 
-from open_spiel.python.observation import IIGObserverForPublicInfoGame
+from open_spiel.python import observation
 import pyspiel
 
 _NUM_PLAYERS = 1
@@ -72,7 +72,7 @@ class MFGCrowdModellingGame(pyspiel.Game):
         num_players=_NUM_PLAYERS,
         min_utility=-np.inf,
         max_utility=+np.inf,
-        utility_sum=0.0,
+        utility_sum=None,
         max_game_length=params["horizon"])
     super().__init__(_GAME_TYPE, game_info, params)
     self.size = params["size"]
@@ -87,7 +87,7 @@ class MFGCrowdModellingGame(pyspiel.Game):
     if ((iig_obs_type is None) or
         (iig_obs_type.public_info and not iig_obs_type.perfect_recall)):
       return Observer(params, self)
-    return IIGObserverForPublicInfoGame(iig_obs_type, params)
+    return observation.IIGObserverForPublicInfoGame(iig_obs_type, params)
 
   def max_chance_nodes_in_history(self):
     """Maximun chance nodes in game history."""
@@ -118,7 +118,7 @@ class MFGCrowdModellingState(pyspiel.State):
 
     # Represents the current probability distribution over game states.
     # Initialized with a uniform distribution.
-    self._distribution = [1. / self.size for i in range(self.size)]
+    self._distribution = [1. / self.size for _ in range(self.size)]
 
   @property
   def x(self):
@@ -173,7 +173,7 @@ class MFGCrowdModellingState(pyspiel.State):
             "The action is between 0 and self.size - 1 at an init chance node")
       self._x = action
       self._is_chance_init = False
-      self._player_id = 0
+      self._player_id = pyspiel.PlayerId.DEFAULT_PLAYER_ID
     elif self._player_id == pyspiel.PlayerId.CHANCE:
       # Here the action is between 0 and 2
       if action < 0 or action > 2:
@@ -182,7 +182,7 @@ class MFGCrowdModellingState(pyspiel.State):
       self._x = (self.x + self._ACTION_TO_MOVE[action]) % self.size
       self._t += 1
       self._player_id = pyspiel.PlayerId.MEAN_FIELD
-    elif self._player_id == 0:
+    elif self._player_id == pyspiel.PlayerId.DEFAULT_PLAYER_ID:
       # Here the action is between 0 and 2
       if action < 0 or action > 2:
         raise ValueError(
@@ -235,7 +235,7 @@ class MFGCrowdModellingState(pyspiel.State):
 
   def _rewards(self):
     """Reward for the player for this state."""
-    if self._player_id == 0:
+    if self._player_id == pyspiel.PlayerId.DEFAULT_PLAYER_ID:
       r_x = 1 - (1.0 * np.abs(self.x - self.size // 2)) / (self.size // 2)
       r_a = -(1.0 * np.abs(self._ACTION_TO_MOVE[self._last_action])) / self.size
       r_mu = - np.log(self._distribution[self.x] + _EPSILON)

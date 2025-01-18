@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,10 +21,6 @@ One iteration of CFR consists of:
 
 The average policy is what converges to a Nash Equilibrium.
 """
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import collections
 import attr
@@ -127,7 +123,7 @@ class _CFRSolverBase(object):
       for i in range(num_iterations):
         solver.evaluate_and_update_policy()
         solver.current_policy()  # Access the current policy
-        solver.average_policy()  # Accsss the average policy
+        solver.average_policy()  # Access the average policy
   ```
   """
 
@@ -271,8 +267,10 @@ class _CFRSolverBase(object):
         new_state = state.child(action)
         new_reach_probabilities = reach_probabilities.copy()
         new_reach_probabilities[-1] *= action_prob
-        state_value += action_prob * self._compute_counterfactual_regret_for_player(
-            new_state, policies, new_reach_probabilities, player)
+        state_value += (action_prob *
+                        self._compute_counterfactual_regret_for_player(
+                            new_state, policies, new_reach_probabilities,
+                            player))
       return state_value
 
     current_player = state.current_player()
@@ -398,7 +396,7 @@ class _CFRSolver(_CFRSolverBase):
   Once the policy has converged, the average policy (which converges to the Nash
   policy) can be computed:
   ```python
-        average_policy = cfr_solver.ComputeAveragePolicy()
+        average_policy = cfr_solver.average_policy()
   ```
 
   # Policy and average policy
@@ -475,7 +473,7 @@ class CFRPlusSolver(_CFRSolver):
   Once the policy has converged, the average policy (which converges to the Nash
   policy) can be computed:
   ```python
-        average_policy = cfr_solver.ComputeAveragePolicy()
+        average_policy = cfr_solver.average_policy()
   ```
   """
 

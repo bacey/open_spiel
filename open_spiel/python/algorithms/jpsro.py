@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -209,8 +209,11 @@ def _eliminate_dominated_decorator(func):
     if not eliminate_dominated:
       return func(payoff, *args, **kwargs)
     num_actions = payoff.shape[1:]
-    eliminated_payoff, action_labels, eliminated_action_repeats = _eliminate_dominated_payoff(
-        payoff, epsilon, action_repeats=per_player_repeats)
+    (eliminated_payoff, action_labels, eliminated_action_repeats) = (
+        _eliminate_dominated_payoff(
+            payoff, epsilon, action_repeats=per_player_repeats
+        )
+    )
     eliminated_dist, meta = func(
         eliminated_payoff, eliminated_action_repeats, *args, **kwargs)
     meta["eliminated_dominated_dist"] = eliminated_dist
@@ -282,9 +285,9 @@ def _cce_constraints(payoff, epsilons, remove_null=True, zero_tolerance=1e-8):
   con = 0
   for p in range(num_players):
     for a1 in range(num_actions[p]):
-      a1_inds = _indices(p, a1, num_players)
+      a1_inds = tuple(_indices(p, a1, num_players))
       for a0 in range(num_actions[p]):
-        a0_inds = _indices(p, a0, num_players)
+        a0_inds = tuple(_indices(p, a0, num_players))
         a_mat[con][a0_inds] += payoff[p][a1_inds]
       a_mat[con] -= payoff[p]
       a_mat[con] -= epsilons[p]
@@ -996,7 +999,7 @@ def _rvcce(meta_game, per_player_repeats, ignore_repeats=False):
 
 
 # Flags to functions.
-_FLAG_TO_FUNC = dict(
+FLAG_TO_FUNC = dict(
     uni=_uni,
     undominated_uni=_undominated_uni,
     rj=_rj,
@@ -1023,7 +1026,7 @@ _FLAG_TO_FUNC = dict(
 ## PSRO Functions.
 
 
-def intilize_policy(game, player, policy_init):
+def initialize_policy(game, player, policy_init):
   """Returns initial policy."""
   if policy_init == "uniform":
     new_policy = policy.TabularPolicy(game, players=(player,))
@@ -1069,7 +1072,7 @@ def add_new_policies(
       for policy_id, policy_ in enumerate(per_player_policies[player]):
         if np.all(  # New policy is not novel.
             new_policy.action_probability_array ==
-            policy_.action_probability_array):
+            policy_.action_probability_array):  # pytype: disable=attribute-error  # py39-upgrade
           logging.debug("Player %d's new policy is not novel.", player)
           repeat_policies.append(new_policy)
           repeat_gaps.append(new_gap)
@@ -1130,10 +1133,8 @@ def add_new_policies(
     logging.debug("Evaluating novel joint policy: %s.", pids)
     policies = [
         policies[pid] for pid, policies in zip(pids, per_player_policies)]
-    python_tabular_policy = policy.merge_tabular_policies(
-        policies, game)
-    pyspiel_tabular_policy = policy.python_policy_to_pyspiel_policy(
-        python_tabular_policy)
+    policies = tuple(map(policy.python_policy_to_pyspiel_policy, policies))
+    pyspiel_tabular_policy = pyspiel.to_joint_tabular_policy(policies, True)
     joint_policies[pids] = pyspiel_tabular_policy
     joint_returns[pids] = [
         0.0 if abs(er) < RETURN_TOL else er
@@ -1164,7 +1165,7 @@ def add_meta_dist(
     ignore_repeats):
   """Returns meta_dist."""
   num_players = meta_game.shape[0]
-  meta_solver_func = _FLAG_TO_FUNC[meta_solver]
+  meta_solver_func = FLAG_TO_FUNC[meta_solver]
   meta_dist, _ = meta_solver_func(
       meta_game, per_player_repeats, ignore_repeats=ignore_repeats)
   # Clean dist.
@@ -1181,8 +1182,15 @@ def add_meta_dist(
 
 
 def find_best_response(
-    game, meta_dist, meta_game, iteration, joint_policies,
-    target_equilibrium, update_players_strategy):
+    game,
+    meta_dist,
+    meta_game,
+    iteration,
+    joint_policies,
+    target_equilibrium,
+    update_players_strategy,
+    action_value_tolerance,
+):
   """Returns new best response policies."""
   num_players = meta_game.shape[0]
   per_player_num_policies = meta_dist.shape[:]
@@ -1219,7 +1227,12 @@ def find_best_response(
 
         mu = [(p, mp) for mp, p in zip(joint_policies_slice, meta_dist_slice)
               if p > 0]
-        info = pyspiel.cce_dist(game, mu, player, prob_cut_threshold=0.0)
+        info = pyspiel.cce_dist(
+            game,
+            mu,
+            player,
+            prob_cut_threshold=0.0,
+            action_value_tolerance=action_value_tolerance)
 
         new_policy = policy.pyspiel_policy_to_python_policy(
             game, info.best_response_policies[0], players=(player,))
@@ -1259,7 +1272,12 @@ def find_best_response(
             mu = [(p, mp) for mp, p in
                   zip(joint_policies_slice, meta_dist_slice)
                   if p > 0]
-            info = pyspiel.cce_dist(game, mu, player, prob_cut_threshold=0.0)
+            info = pyspiel.cce_dist(
+                game,
+                mu,
+                player,
+                prob_cut_threshold=0.0,
+                action_value_tolerance=action_value_tolerance)
 
             new_policy = policy.pyspiel_policy_to_python_policy(
                 game, info.best_response_policies[0], players=(player,))
@@ -1310,9 +1328,9 @@ def initialize(game, train_meta_solver, eval_meta_solver, policy_init,
 
   # Initialize policies.
   per_player_new_policies = [
-      [intilize_policy(game, player, policy_init)]
+      [initialize_policy(game, player, policy_init)]
       for player in range(num_players)]
-  per_player_gaps_train = [[1.0] for player in range(num_players)]
+  per_player_gaps_train = [[1.0] for _ in range(num_players)]
   per_player_num_novel_policies = add_new_policies(
       per_player_new_policies, per_player_gaps_train, per_player_repeats,
       per_player_policies, joint_policies, joint_returns, game, br_selection)
@@ -1399,20 +1417,20 @@ def callback_(
   return checkpoint
 
 
-def run_loop(
-    game,
-    game_name,
-    seed=0,
-    iterations=40,
-    policy_init="uniform",
-    update_players_strategy="all",
-    target_equilibrium="cce",
-    br_selection="largest_gap",
-    train_meta_solver="mgcce",
-    eval_meta_solver="mwcce",
-    ignore_repeats=False,
-    initialize_callback=None,
-    callback=None):
+def run_loop(game,
+             game_name,
+             seed=0,
+             iterations=40,
+             policy_init="uniform",
+             update_players_strategy="all",
+             target_equilibrium="cce",
+             br_selection="largest_gap",
+             train_meta_solver="mgcce",
+             eval_meta_solver="mwcce",
+             ignore_repeats=False,
+             initialize_callback=None,
+             action_value_tolerance=-1.0,
+             callback=None):
   """Runs JPSRO."""
   if initialize_callback is None:
     initialize_callback = initialize_callback_
@@ -1461,12 +1479,26 @@ def run_loop(
   while iteration <= iterations:
     logging.debug("Beginning JPSRO iteration %03d", iteration)
     per_player_new_policies, per_player_gaps_train = find_best_response(
-        game, train_meta_dists[-1], meta_games[-1], iteration, joint_policies,
-        target_equilibrium, update_players_strategy)
+        game,
+        train_meta_dists[-1],
+        meta_games[-1],
+        iteration,
+        joint_policies,
+        target_equilibrium,
+        update_players_strategy,
+        action_value_tolerance,
+    )
     train_meta_gaps.append([sum(gaps) for gaps in per_player_gaps_train])
     _, per_player_gaps_eval = find_best_response(
-        game, eval_meta_dists[-1], meta_games[-1], iteration, joint_policies,
-        target_equilibrium, update_players_strategy)
+        game,
+        eval_meta_dists[-1],
+        meta_games[-1],
+        iteration,
+        joint_policies,
+        target_equilibrium,
+        update_players_strategy,
+        action_value_tolerance,
+    )
     eval_meta_gaps.append([sum(gaps) for gaps in per_player_gaps_eval])
     per_player_num_novel_policies = add_new_policies(
         per_player_new_policies, per_player_gaps_train, per_player_repeats,

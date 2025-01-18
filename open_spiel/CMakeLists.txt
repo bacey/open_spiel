@@ -1,6 +1,8 @@
 # Version >= 3.12 required for new FindPython module
 # https://cmake.org/cmake/help/v3.12/release/3.12.html
-cmake_minimum_required (VERSION 3.12)
+# Version >= 3.17 required for CMAKE_CUDA_STANDARD
+# https://gitlab.kitware.com/cmake/cmake/-/issues/19123
+cmake_minimum_required (VERSION 3.17)
 project (open_spiel)
 
 # Define some nice terminal colors.
@@ -25,6 +27,9 @@ if(NOT WIN32)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 14)
+set(CMAKE_CUDA_STANDARD_REQUIRED TRUE)
+set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
 # Set default build type.
 set (BUILD_TYPE $ENV{BUILD_TYPE})
@@ -63,6 +68,9 @@ if(APPLE)
   # On MacOS, we need this so that CMake will use the right Python if the user
   # has a virtual environment active
   set (CMAKE_FIND_FRAMEWORK LAST)
+elseif(WIN32)
+  # Setup for MSVC 2022.
+  # No changes needed. In particular: do not use -Wno-everything.
 else()
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-everything")
 endif()
@@ -99,10 +107,6 @@ endmacro()
 # List of all optional dependencies:
 openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_ACPC           OFF
   "Build against the Universal Poker library.")
-openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_EIGEN          OFF
-  "Build with support for Eigen in C++.")
-openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_GO             OFF
-  "Build with support for Golang API.")
 openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_HANABI         OFF
   "Build against the Hanabi game.")
 openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_JULIA          OFF
@@ -111,8 +115,6 @@ openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_LIBNOP         OFF
   "Build with support for libnop.")
 openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_LIBTORCH       OFF
   "Build with support for libtorch.")
-openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_TENSORFLOW_CC  OFF
-  "Build with support for Tensorflow C++ API.")
 openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_PYTHON         ON
   "Build binary for Python.")
 openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_XINXIN         OFF
@@ -124,18 +126,27 @@ openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_GAMUT          OFF
 openspiel_optional_dependency(OPEN_SPIEL_BUILD_WITH_ORTOOLS        OFF
   "Build with C++ optimization library OR-Tools.")
 
-openspiel_optional_dependency(OPEN_SPIEL_ENABLE_JAX               AUTO
-  "Enable JAX.")
-openspiel_optional_dependency(OPEN_SPIEL_ENABLE_PYTORCH           AUTO
-  "Enable PyTorch.")
-openspiel_optional_dependency(OPEN_SPIEL_ENABLE_TENSORFLOW        AUTO
-  "Enable Tensorflow.")
+if (WIN32)
+  openspiel_optional_dependency(OPEN_SPIEL_ENABLE_JAX              OFF
+    "Enable JAX.")
+  openspiel_optional_dependency(OPEN_SPIEL_ENABLE_PYTORCH          OFF
+    "Enable PyTorch.")
+  openspiel_optional_dependency(OPEN_SPIEL_ENABLE_TENSORFLOW       OFF
+    "Enable Tensorflow.")
+else()
+  openspiel_optional_dependency(OPEN_SPIEL_ENABLE_JAX             AUTO
+    "Enable JAX.")
+  openspiel_optional_dependency(OPEN_SPIEL_ENABLE_PYTORCH         AUTO
+    "Enable PyTorch.")
+  openspiel_optional_dependency(OPEN_SPIEL_ENABLE_TENSORFLOW      AUTO
+    "Enable Tensorflow.")
+endif()
+
 openspiel_optional_dependency(OPEN_SPIEL_ENABLE_PYTHON_MISC       OFF
   "Enable miscellaneous Python dependencies.")
 
 openspiel_optional_dependency(OPEN_SPIEL_BUILDING_WHEEL           OFF
   "Building a Python wheel?")
-
 
 # Needed to disable Abseil tests.
 set (BUILD_TESTING OFF)
@@ -168,17 +179,21 @@ set (OPEN_SPIEL_CORE_FILES
   spiel_utils.h
   tensor_game.cc
   tensor_game.h
+  utils/usage_logging.h
+  utils/usage_logging.cc
 )
 
 # We add the subdirectory here so open_spiel_core can #include absl.
+set(ABSL_PROPAGATE_CXX_STD ON)
 add_subdirectory (abseil-cpp)
+include_directories (abseil-cpp)
 
 # Just the core without any of the games
 add_library(open_spiel_core OBJECT ${OPEN_SPIEL_CORE_FILES})
 target_include_directories (
   open_spiel_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} abseil-cpp)
 link_libraries(open_spiel_core
-  absl::container
+  absl::algorithm
   absl::flags
   absl::flags_parse
   absl::flat_hash_map
@@ -197,7 +212,6 @@ set (OPEN_SPIEL_OBJECTS
   $<TARGET_OBJECTS:bots>
   $<TARGET_OBJECTS:games>
   $<TARGET_OBJECTS:game_transforms>
-  $<TARGET_OBJECTS:higc>
   $<TARGET_OBJECTS:bridge_double_dummy_solver>
   $<TARGET_OBJECTS:algorithms>
   $<TARGET_OBJECTS:utils>
@@ -211,15 +225,6 @@ if (OPEN_SPIEL_BUILD_WITH_ACPC)
   set(OPEN_SPIEL_OBJECTS ${OPEN_SPIEL_OBJECTS}
       $<TARGET_OBJECTS:universal_poker_clib>
       $<TARGET_OBJECTS:universal_poker_lib>)
-endif()
-if (OPEN_SPIEL_BUILD_WITH_EIGEN)
-  add_compile_definitions(OPEN_SPIEL_BUILD_WITH_EIGEN)
-  # Add Eigen dependency.
-  add_subdirectory(eigen/)
-  # Now we can use #include "Eigen/Dense"
-  # This is needed so that pybind11/eigen.h locates <Eigen/Core>
-  include_directories(eigen/libeigen)
-  set(OPEN_SPIEL_OBJECTS ${OPEN_SPIEL_OBJECTS} $<TARGET_OBJECTS:eigen>)
 endif()
 if (OPEN_SPIEL_BUILD_WITH_XINXIN)
   set(OPEN_SPIEL_OBJECTS ${OPEN_SPIEL_OBJECTS} $<TARGET_OBJECTS:xinxin>)
@@ -248,7 +253,7 @@ if (OPEN_SPIEL_BUILD_WITH_ORTOOLS)
   # and assumed to be in $HOME/or-tools.
   # The flags were taken from the compilation of linear_programming.cc after
   # running make test_cc.
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_BOP -DUSE_GLOP -DUSE_CBC -DUSE_CLP -DUSE_SCIP")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_BOP -DUSE_GLOP -DUSE_CBC -DUSE_CLP -DUSE_SCIP -pthread")
   set(ORTOOLS_HOME "${CMAKE_CURRENT_SOURCE_DIR}/ortools")
   set(ORTOOLS_INC_DIRS ${ORTOOLS_HOME} ${ORTOOLS_HOME}/include)
   set(ORTOOLS_LIB_DIRS ${ORTOOLS_HOME}/lib ${ORTOOLS_HOME}/lib64)
@@ -258,10 +263,6 @@ if (OPEN_SPIEL_BUILD_WITH_ORTOOLS)
   link_directories(${ORTOOLS_LIB_DIRS})
   # Use following to link your_target_executable with OrTools libraries:
   # target_link_libraries(your_target_executable ${ORTOOLS_LIBS})
-endif()
-if (OPEN_SPIEL_BUILD_WITH_TENSORFLOW_CC)
-  add_compile_definitions(OPEN_SPIEL_BUILD_WITH_TENSORFLOW_CC)
-  find_package(TensorflowCC REQUIRED)
 endif()
 
 # We have the parent of this directory in the include path, so that we can
@@ -274,17 +275,9 @@ add_subdirectory (bots)
 add_subdirectory (examples)
 add_subdirectory (games)
 add_subdirectory (game_transforms)
-add_subdirectory (contrib)
-
-if (OPEN_SPIEL_BUILD_WITH_GO)
-  add_subdirectory(go)
-endif()
 
 if (OPEN_SPIEL_BUILD_WITH_PYTHON)
   add_subdirectory (python)
-  # HIGC needs pyspiel.so and corresponding PYTHONPATH to be set
-  # in order to run its tests.
-  add_subdirectory (higc)
 endif()
 
 add_subdirectory (utils)
@@ -316,7 +309,7 @@ if (BUILD_SHARED_LIB)
   target_include_directories(open_spiel PUBLIC
       ${CMAKE_CURRENT_SOURCE_DIR} abseil-cpp)
   target_link_libraries(open_spiel PUBLIC
-    absl::container
+    absl::algorithm
     absl::flat_hash_map
     absl::optional
     absl::random_random

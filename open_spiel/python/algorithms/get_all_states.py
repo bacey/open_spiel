@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Example algorithm to get all states from a game."""
+"""Example algorithm to get all states from a game.
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+The algorithm does not support mean field games where the game evolution depends
+on the mean field distribution.
+"""
 
 import itertools
 
@@ -64,7 +64,7 @@ def _get_subgames_states(state, all_states, depth_limit, depth,
                          include_terminals, include_chance_states,
                          include_mean_field_states, to_string,
                          stop_if_encountered)
-  if state.is_simultaneous_node():
+  elif state.is_simultaneous_node():
     joint_legal_actions = [
         state.legal_actions(player)
         for player in range(state.get_game().num_players())

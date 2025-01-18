@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -132,16 +132,16 @@ class NormalFormGame : public SimMoveGame {
     return GetUtilities(joint_action)[player];
   }
 
-  double UtilitySum() const override {
+  absl::optional<double> UtilitySum() const override {
     if (game_type_.utility == GameType::Utility::kZeroSum) {
       return 0.0;
     } else if (game_type_.utility == GameType::Utility::kConstantSum) {
       std::vector<Action> joint_action(NumPlayers(), 0);
       std::vector<double> utilities = GetUtilities(joint_action);
       return std::accumulate(utilities.begin(), utilities.end(), 0.0);
+    } else {
+      return absl::nullopt;
     }
-    SpielFatalError(absl::StrCat("No appropriate UtilitySum value for ",
-                                 "general-sum or identical utility games."));
   }
 
  protected:

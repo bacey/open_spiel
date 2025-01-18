@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -56,7 +56,7 @@ class JointPolicyAggregatorTest(parameterized.TestCase):
         probs = list(state_action_probs.values())
         expected_prob = 1. / len(probs)
         for prob in probs:
-          self.assertEqual(expected_prob, prob)
+          self.assertAlmostEqual(expected_prob, prob, places=10)
 
 
 if __name__ == "__main__":

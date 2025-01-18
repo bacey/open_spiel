@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,19 +14,26 @@
 
 #include "open_spiel/utils/file.h"
 
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#include <sys/types.h>
+
+#include <cstdlib>
 
 #ifdef _WIN32
 // https://stackoverflow.com/a/42906151
+#include <direct.h>
+#include <stdio.h>
 #include <windows.h>
 #define mkdir(dir, mode) _mkdir(dir)
 #define unlink(file) _unlink(file)
 #define rmdir(dir) _rmdir(dir)
+#else
+#include <unistd.h>
 #endif
 
+#include <cstdint>
 #include <cstdio>
+#include <string>
 
 #include "open_spiel/spiel_utils.h"
 
@@ -87,9 +94,30 @@ std::string ReadContentsFromFile(const std::string& filename,
   return f.ReadContents();
 }
 
+void WriteContentsToFile(const std::string& filename, const std::string& mode,
+                         const std::string& contents) {
+  File f(filename, mode);
+  f.Write(contents);
+}
+
 bool Exists(const std::string& path) {
   struct stat info;
   return stat(path.c_str(), &info) == 0;
+}
+
+std::string RealPath(const std::string& path) {
+#ifdef _WIN32
+  char real_path[MAX_PATH];
+  if (_fullpath(real_path, path.c_str(), MAX_PATH) == nullptr) {
+#else
+  char real_path[PATH_MAX];
+  if (realpath(path.c_str(), real_path) == nullptr) {
+    // If there was an error return an empty path
+#endif
+    return "";
+  }
+
+  return std::string(real_path);
 }
 
 bool IsDirectory(const std::string& path) {

@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -64,7 +64,11 @@ class MisereGame : public WrappedGame {
 
   double MinUtility() const override { return -game_->MaxUtility(); }
   double MaxUtility() const override { return -game_->MinUtility(); }
-  double UtilitySum() const override { return -game_->UtilitySum(); }
+  absl::optional<double> UtilitySum() const override {
+    auto base_game_utility_sum = game_->UtilitySum();
+    return !base_game_utility_sum.has_value() ? base_game_utility_sum
+                                              : -base_game_utility_sum.value();
+  }
 };
 
 }  // namespace open_spiel

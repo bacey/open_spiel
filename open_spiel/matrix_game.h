@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -83,6 +83,27 @@ class MatrixGame : public NormalFormGame {
     return std::max(
         *std::max_element(begin(row_utilities_), end(row_utilities_)),
         *std::max_element(begin(col_utilities_), end(col_utilities_)));
+  }
+
+  absl::optional<double> UtilitySum() const override;
+
+  std::string ActionToString(Player player, Action action) const override {
+    switch (player) {
+      case 0: {
+        SPIEL_CHECK_GE(action, 0);
+        SPIEL_CHECK_LT(action, row_action_names_.size());
+        return row_action_names_[action];
+      }
+
+      case 1: {
+        SPIEL_CHECK_GE(action, 0);
+        SPIEL_CHECK_LT(action, col_action_names_.size());
+        return col_action_names_[action];
+      }
+
+      default:
+        SpielFatalError("Unknown player");
+    }
   }
 
   // Methods for MatrixState to call.

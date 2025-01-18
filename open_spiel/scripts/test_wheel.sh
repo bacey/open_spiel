@@ -20,7 +20,7 @@ set -x
 
 if [ "$2" = "" ];
 then
-  echo "Usage: test_wheel <mode (full|basic)> <project main dir>"
+  echo "Usage: test_wheel <mode (full|basic)> <project main dir> [python binary]"
   echo ""
   echo "Basic mode tests only the python functionaly (no ML libraries)"
   echo "Full mode installs the extra ML libraries and the wheel. (requires Python >= 3.7 for JAX)."
@@ -31,8 +31,9 @@ MODE=$1
 PROJDIR=$2
 
 uname -a
-
 OS=`uname -a | awk '{print $1}'`
+
+# If it's full mode on Linux, we have to install Python 3.9 and make it the default.
 if [[ "$MODE" = "full" && "$OS" = "Linux" && "$OS_PYTHON_VERSION" = "3.9" ]]; then
   echo "Linux detected and Python 3.9 requested. Installing Python 3.9 and setting as default."
   sudo apt-get install python3.9 python3.9-dev
@@ -40,23 +41,33 @@ if [[ "$MODE" = "full" && "$OS" = "Linux" && "$OS_PYTHON_VERSION" = "3.9" ]]; th
   sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1
 fi
 
-PYBIN=${PYBIN:-"python"}
+# Setting of PYBIN is complicated because of all the different environments this is run from.
+if [[ "$3" != "" ]]; then
+  PYBIN=$3
+else
+  PYBIN=${PYBIN:-"python3"}
+fi
+
 PYBIN=`which $PYBIN`
-         
 $PYBIN -m pip install --upgrade setuptools
 $PYBIN -m pip install --upgrade -r $PROJDIR/requirements.txt -q
 
-if [[ "$MODE" = "full" ]]; then  
-  echo "Full mode. Installing ML libraries."
-  source $PROJDIR/open_spiel/scripts/python_extra_deps.sh
-  $PYBIN -m pip install --upgrade $OPEN_SPIEL_PYTHON_JAX_DEPS $OPEN_SPIEL_PYTHON_PYTORCH_DEPS $OPEN_SPIEL_PYTHON_TENSORFLOW_DEPS $OPEN_SPIEL_PYTHON_MISC_DEPS
+if [[ "$MODE" = "full" ]]; then
+  echo "Full mode. Installing Python extra deps libraries."
+  source $PROJDIR/open_spiel/scripts/python_extra_deps.sh $PYBIN
+  $PYBIN -m pip install --upgrade $OPEN_SPIEL_PYTHON_JAX_DEPS
+  $PYBIN -m pip install --upgrade $OPEN_SPIEL_PYTHON_PYTORCH_DEPS
+  $PYBIN -m pip install --upgrade $OPEN_SPIEL_PYTHON_TENSORFLOW_DEPS
+  $PYBIN -m pip install --upgrade $OPEN_SPIEL_PYTHON_MISC_DEPS
 fi
 
 if [[ "$MODE" = "full" ]]; then
   if [[ "$OS" = "Linux" ]]; then
-    ${PYBIN} -m pip install wheelhouse/open_spiel-*-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-  else
+    ${PYBIN} -m pip install wheelhouse/open_spiel-*-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+  elif [[ "$OS" = "Darwin" && "$OS_PYTHON_VERSION" = "3.9" ]]; then
     ${PYBIN} -m pip install wheelhouse/open_spiel-*-cp39-cp39-macosx_10_9_x86_64.whl
+  else
+    ${PYBIN} -m pip install wheelhouse/open_spiel-*-cp311-cp311-macosx_11_0_arm64.whl
   fi
 fi
 
@@ -68,7 +79,7 @@ rm -rf build && mkdir build && cd build
 cmake -DPython3_EXECUTABLE=${PYBIN} $PROJDIR/open_spiel
 
 NPROC="nproc"
-if [[ "$OS" == "darwin"* ]]; then
+if [[ "$OS" == "darwin"* || "$OS" == "Darwin"* ]]; then
   NPROC="sysctl -n hw.physicalcpu"
 fi
 

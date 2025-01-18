@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Meta-strategy solvers for PSRO."""
 
 import numpy as np
 
 from open_spiel.python.algorithms import lp_solver
 from open_spiel.python.algorithms import projected_replicator_dynamics
+from open_spiel.python.algorithms import regret_matching
 import pyspiel
 
 
@@ -95,21 +95,18 @@ def renormalize(probabilities):
 
 
 def get_joint_strategy_from_marginals(probabilities):
-  """Returns a joint strategy matrix from a list of marginals.
+  """Returns a joint strategy tensor from a list of marginals.
 
   Args:
     probabilities: list of probabilities.
 
   Returns:
-    A joint strategy from a list of marginals.
+    A flat joint strategy from a list of marginals.
   """
-  probas = []
-  for i in range(len(probabilities)):
-    probas_shapes = [1] * len(probabilities)
-    probas_shapes[i] = -1
-    probas.append(probabilities[i].reshape(*probas_shapes))
-  result = np.product(probas)
-  return result.reshape(-1)
+  res = np.ones((1,), dtype=np.float64)
+  for prob in probabilities:
+    res = res[..., None] @ np.asarray(prob).reshape((1,) * res.ndim + (-1,))
+  return res.reshape(-1)
 
 
 def nash_strategy(solver, return_joint=False):
@@ -172,9 +169,33 @@ def prd_strategy(solver, return_joint=False):
     return result, joint_strategies
 
 
+def rm_strategy(solver, return_joint=False):
+  """Computes regret-matching strategies.
+
+  Args:
+    solver: GenPSROSolver instance.
+    return_joint: If true, only returns marginals. Otherwise marginals as well
+      as joint probabilities.
+
+  Returns:
+    PRD-computed strategies.
+  """
+  meta_games = solver.get_meta_game()
+  if not isinstance(meta_games, list):
+    meta_games = [meta_games, -meta_games]
+  kwargs = solver.get_kwargs()
+  result = regret_matching.regret_matching(meta_games, **kwargs)
+  if not return_joint:
+    return result
+  else:
+    joint_strategies = get_joint_strategy_from_marginals(result)
+    return result, joint_strategies
+
+
 META_STRATEGY_METHODS = {
     "uniform_biased": uniform_biased_strategy,
     "uniform": uniform_strategy,
     "nash": nash_strategy,
     "prd": prd_strategy,
+    "rm": rm_strategy,
 }

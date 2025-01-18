@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Lint as: python3
 """Strategy selectors repository."""
 
 import numpy as np
@@ -320,6 +319,22 @@ def empty_list_generator(number_dimensions):
   return result
 
 
+def get_indices_from_non_marginalized(policies):
+  """Get a list of lists of indices from joint policies.
+
+  These are the ones used for training strategy selector.
+
+  Args:
+    policies: a list of joint policies.
+
+  Returns:
+    A list of lists of indices.
+  """
+  num_players = len(policies[0])
+  num_strategies = len(policies)
+  return [list(range(num_strategies)) for _ in range(num_players)]
+
+
 # In case we want to select strategies to train  based on
 # non-marginalized probabilities.
 def rectified_non_marginalized(solver):
@@ -331,8 +346,8 @@ def rectified_non_marginalized(solver):
   used_policies = []
   policies = solver.get_policies()
   num_players = len(policies)
-  meta_strategy_probabilities = solver.get_and_update_non_marginalized_meta_strategies(
-      update=False)
+  meta_strategy_probabilities = (
+      solver.get_and_update_non_marginalized_meta_strategies(update=False))
   for k in range(num_players):
     current_policies = policies[k]
     current_probabilities = meta_strategy_probabilities[k]
@@ -342,7 +357,7 @@ def rectified_non_marginalized(solver):
         if current_probabilities[i] > EPSILON_MIN_POSITIVE_PROBA
     ]
     used_policies.append(current_policies)
-  return used_policies
+  return used_policies, get_indices_from_non_marginalized(used_policies)
 
 
 def exhaustive_non_marginalized(solver):
@@ -351,7 +366,8 @@ def exhaustive_non_marginalized(solver):
   Args:
     solver: A GenPSROSolver instance.
   """
-  return solver.get_policies()
+  used_policies = solver.get_policies()
+  return used_policies, get_indices_from_non_marginalized(used_policies)
 
 
 def probabilistic_non_marginalized(solver):
@@ -366,15 +382,15 @@ def probabilistic_non_marginalized(solver):
 
   # Get integer IDs and probabilities of meta-strategies
   ids = solver.get_joint_policy_ids()
-  joint_strategy_probabilities = solver.get_and_update_non_marginalized_meta_strategies(
-      update=False)
+  joint_strategy_probabilities = (
+      solver.get_and_update_non_marginalized_meta_strategies(update=False))
 
   effective_number = min(number_policies_to_select, len(ids))
   selected_policy_ids = list(
       np.random.choice(
           ids, effective_number, replace=False, p=joint_strategy_probabilities))
   used_policies = solver.get_joint_policies_from_id_list(selected_policy_ids)
-  return used_policies
+  return used_policies, get_indices_from_non_marginalized(used_policies)
 
 
 def top_k_probabilites_non_marginalized(solver):
@@ -390,8 +406,8 @@ def top_k_probabilites_non_marginalized(solver):
   ids = solver.get_joint_policy_ids()
 
   effective_number = min(number_policies_to_select, len(ids))
-  joint_strategy_probabilities = solver.get_and_update_non_marginalized_meta_strategies(
-      update=False)
+  joint_strategy_probabilities = (
+      solver.get_and_update_non_marginalized_meta_strategies(update=False))
 
   sorted_list = sorted(
       zip(joint_strategy_probabilities, ids),
@@ -401,7 +417,7 @@ def top_k_probabilites_non_marginalized(solver):
                         ][:effective_number]
 
   used_policies = solver.get_joint_policies_from_id_list(selected_policy_ids)
-  return used_policies
+  return used_policies, get_indices_from_non_marginalized(used_policies)
 
 
 def uniform_non_marginalized(solver):
@@ -421,7 +437,7 @@ def uniform_non_marginalized(solver):
       np.random.choice(
           ids, effective_number, replace=False, p=np.ones(len(ids)) / len(ids)))
   used_policies = solver.get_joint_policies_from_id_list(selected_policy_ids)
-  return used_policies
+  return used_policies, get_indices_from_non_marginalized(used_policies)
 
 
 def compressed_lambda(x):
@@ -449,7 +465,7 @@ def functional_probabilistic_non_marginalized(solver):
       np.random.choice(
           ids, effective_number, replace=False, p=joint_strategy_probabilities))
   used_policies = solver.get_joint_policies_from_id_list(selected_policies)
-  return used_policies
+  return used_policies, get_indices_from_non_marginalized(used_policies)
 
 
 TRAINING_STRATEGY_SELECTORS = {
@@ -458,5 +474,13 @@ TRAINING_STRATEGY_SELECTORS = {
     "probabilistic": probabilistic,
     "exhaustive": exhaustive,
     "rectified": rectified,
-    "uniform": uniform
+    "uniform": uniform,
+    "functional_probabilistic_non_marginalized": (
+        functional_probabilistic_non_marginalized
+    ),
+    "top_k_probabilites_non_marginalized": top_k_probabilites_non_marginalized,
+    "probabilistic_non_marginalized": probabilistic_non_marginalized,
+    "exhaustive_non_marginalized": exhaustive_non_marginalized,
+    "rectified_non_marginalized": rectified_non_marginalized,
+    "uniform_non_marginalized": uniform_non_marginalized,
 }

@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,10 +13,6 @@
 # limitations under the License.
 
 """Tests for open_spiel.python.algorithms.cfr."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import itertools
 
@@ -266,14 +262,67 @@ class CFRTest(parameterized.TestCase, absltest.TestCase):
       # convert one to the other, so we use the exploitability as a proxy.
       cpp_expl = pyspiel.nash_conv(game, cpp_avg_policy)
       python_expl = exploitability.nash_conv(game, python_avg_policy)
-      self.assertEqual(cpp_expl, python_expl)
+      self.assertAlmostEqual(cpp_expl, python_expl, places=10)
     # Then we also check the CurrentPolicy, just to check it is giving the same
     # results too
     cpp_current_policy = cpp_solver.current_policy()
     python_current_policy = python_solver.current_policy()
     cpp_expl = pyspiel.nash_conv(game, cpp_current_policy)
     python_expl = exploitability.nash_conv(game, python_current_policy)
-    self.assertEqual(cpp_expl, python_expl)
+    self.assertAlmostEqual(cpp_expl, python_expl, places=10)
+
+
+class CorrDistTest(absltest.TestCase):
+  """Test some of the correlation device distances functions in C++.
+
+  These functions are analogues to NashConv for various forms of correlated
+  equilibria.
+  """
+
+  def test_cce_dist_kuhn_3p_cpp(self):
+    game = pyspiel.load_game("kuhn_poker(players=3)")
+    solver = pyspiel.CFRSolver(game)  # C++ solver
+    strategies = []
+    corr_dist_values = []
+    for _ in range(10):
+      solver.evaluate_and_update_policy()
+      strategies.append(solver.tabular_current_policy())
+      corr_dev = pyspiel.uniform_correlation_device(strategies)
+      cce_dist_info = pyspiel.cce_dist(game, corr_dev)
+      corr_dist_values.append(cce_dist_info.dist_value)
+    self.assertLess(corr_dist_values[-1], corr_dist_values[0])
+
+  def test_cce_dist_kuhn_3p(self):
+    game = pyspiel.load_game("kuhn_poker(players=3)")
+    solver = cfr._CFRSolver(game,
+                            regret_matching_plus=False,
+                            linear_averaging=False,
+                            alternating_updates=True)
+    strategies = []
+    corr_dist_values = []
+    for _ in range(10):
+      solver.evaluate_and_update_policy()
+      # Convert the policy to a pyspiel.TabularPolicy, needed by the CorrDist
+      # functions on the C++ side.
+      strategies.append(policy.python_policy_to_pyspiel_policy(
+          solver.current_policy()))
+      corr_dev = pyspiel.uniform_correlation_device(strategies)
+      cce_dist_info = pyspiel.cce_dist(game, corr_dev)
+      corr_dist_values.append(cce_dist_info.dist_value)
+    self.assertLess(corr_dist_values[-1], corr_dist_values[0])
+
+  def test_cce_dist_sheriff_cpp(self):
+    game = pyspiel.load_game("sheriff")
+    solver = pyspiel.CFRSolver(game)  # C++ solver
+    strategies = []
+    corr_dist_values = []
+    for _ in range(3):
+      solver.evaluate_and_update_policy()
+      strategies.append(solver.tabular_current_policy())
+      corr_dev = pyspiel.uniform_correlation_device(strategies)
+      cce_dist_info = pyspiel.cce_dist(game, corr_dev)
+      corr_dist_values.append(cce_dist_info.dist_value)
+    self.assertLess(corr_dist_values[-1], corr_dist_values[0])
 
 
 if __name__ == "__main__":

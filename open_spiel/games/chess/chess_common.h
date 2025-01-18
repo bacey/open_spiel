@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2019 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -48,6 +48,22 @@ struct Square {
   }
 
   bool operator!=(const Square& other) const { return !(*this == other); }
+
+  // Required by std::set.
+  bool operator<(const Square& other) const {
+    if (x != other.x) {
+      return x < other.x;
+    } else {
+      return y < other.y;
+    }
+  }
+
+  std::string ToString() const {
+    std::string s;
+    s.push_back('a' + x);
+    s.push_back('1' + y);
+    return s;
+  }
 
   int8_t x;
   int8_t y;

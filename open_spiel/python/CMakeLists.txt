@@ -16,11 +16,12 @@ endif()
 
 message(NOTICE "Python executable: ${Python3_EXECUTABLE}")
 message(NOTICE "Python include dirs: ${Python3_INCLUDE_DIRS}")
+message(NOTICE "Python library dirs: ${Python3_LIBRARY_DIRS}")
 include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
 
-if(Python3_VERSION VERSION_LESS "3.6.0")
+if(Python3_VERSION VERSION_LESS "3.8.0")
   message(FATAL_ERROR
-    "Python found ${Python3_VERSION} < 3.6.0")
+    "Python found ${Python3_VERSION} < 3.8.0")
 endif()
 
 # Detect the Python ML frameworks.
@@ -74,6 +75,7 @@ endif()
 
 
 # List of all Python bindings to add to pyspiel.
+include_directories (../pybind11_abseil ../../pybind11/include)
 set(PYTHON_BINDINGS ${PYTHON_BINDINGS}
   pybind11/algorithms_corr_dist.cc
   pybind11/algorithms_corr_dist.h
@@ -83,16 +85,34 @@ set(PYTHON_BINDINGS ${PYTHON_BINDINGS}
   pybind11/bots.h
   pybind11/games_backgammon.cc
   pybind11/games_backgammon.h
+  pybind11/games_bargaining.cc
+  pybind11/games_bargaining.h
   pybind11/games_bridge.cc
   pybind11/games_bridge.h
   pybind11/games_chess.cc
   pybind11/games_chess.h
+  pybind11/games_colored_trails.cc
+  pybind11/games_colored_trails.h
+  pybind11/games_dots_and_boxes.cc
+  pybind11/games_dots_and_boxes.h
+  pybind11/games_euchre.cc
+  pybind11/games_euchre.h
+  pybind11/games_gin_rummy.cc
+  pybind11/games_gin_rummy.h
   pybind11/games_kuhn_poker.cc
   pybind11/games_kuhn_poker.h
+  pybind11/games_leduc_poker.cc
+  pybind11/games_leduc_poker.h
   pybind11/games_negotiation.cc
   pybind11/games_negotiation.h
+  pybind11/games_spades.cc
+  pybind11/games_spades.h
   pybind11/games_tarok.cc
   pybind11/games_tarok.h
+  pybind11/games_tiny_bridge.cc
+  pybind11/games_tiny_bridge.h
+  pybind11/games_trade_comm.cc
+  pybind11/games_trade_comm.h
   pybind11/game_transforms.cc
   pybind11/game_transforms.h
   pybind11/observer.cc
@@ -103,9 +123,18 @@ set(PYTHON_BINDINGS ${PYTHON_BINDINGS}
   pybind11/pyspiel.cc
   pybind11/python_games.cc
   pybind11/python_games.h
-  pybind11/referee.cc
-  pybind11/referee.h
+  pybind11/python_policy.cc
+  pybind11/python_policy.h
+  pybind11/utils.cc
+  pybind11/utils.h
   )
+
+if (OPEN_SPIEL_BUILD_WITH_ACPC)
+  set(PYTHON_BINDINGS ${PYTHON_BINDINGS}
+      pybind11/games_universal_poker.cc
+      pybind11/games_universal_poker.h
+  )
+endif()
 
 # Optional pyspiel sub-modules, which can specify their python bindings.
 if (OPEN_SPIEL_BUILD_WITH_GAMUT)
@@ -122,24 +151,15 @@ if (OPEN_SPIEL_BUILD_WITH_XINXIN)
 endif()
 
 add_library(pyspiel MODULE ${PYTHON_BINDINGS} ${OPEN_SPIEL_OBJECTS})
+target_link_directories(pyspiel PUBLIC ${Python3_LIBRARY_DIRS})
 
 # Without this, the binary is called `libpyspiel.so`
 set_target_properties(pyspiel PROPERTIES PREFIX "")
-
-# Optional pyspiel-related modules, which can specify their own python tests.
-if (OPEN_SPIEL_BUILD_WITH_EIGEN)
-  add_library(pyspiel_eigen_test MODULE
-    ../eigen/eigen_test_support.h
-    ../eigen/pyeig.h
-    ../eigen/pyspiel_eigen_test.cc
-    ${OPEN_SPIEL_OBJECTS})
-
-  # Without this, the binary is called `libpyspiel_eigen_test.so`
-  set_target_properties(pyspiel_eigen_test PROPERTIES PREFIX "")
-
-  set(PYTHON_TESTS ${PYTHON_TESTS}
-    ../eigen/eigen_binding_test.py)
+if (WIN32)
+  # Python does not seem able to import the module without this change.
+  set_target_properties(pyspiel PROPERTIES SUFFIX ".pyd")
 endif()
+
 if (OPEN_SPIEL_BUILD_WITH_XINXIN)
   set(PYTHON_TESTS ${PYTHON_TESTS} ../bots/xinxin/xinxin_bot_test.py)
 endif()
@@ -147,6 +167,11 @@ if (OPEN_SPIEL_BUILD_WITH_GAMUT)
   set(PYTHON_TESTS ${PYTHON_TESTS} ../games/gamut/gamut_test.py)
 endif()
 
+# Note: cvxopt does not yet support binary wheels for Python 3.11.
+# It has been temporary removed from the python_extra_deps.
+# As a result, several tests are disabled until a cvxopt wheel becomes
+# available for Python 3.11.
+# See https://github.com/cvxopt/cvxopt/issues/228 for discussion.
 
 # Python tests to run. Start with all the core tests here first, then
 # conditionally add other tests based on what has been enabled/detected.
@@ -156,8 +181,10 @@ set(PYTHON_TESTS ${PYTHON_TESTS}
   algorithms/action_value_test.py
   algorithms/action_value_vs_best_response_test.py
   algorithms/best_response_test.py
+  algorithms/boltzmann_tabular_qlearner_test.py
   algorithms/cfr_br_test.py
   algorithms/cfr_test.py
+  algorithms/efr_test.py
   algorithms/evaluate_bots_test.py
   algorithms/expected_game_score_test.py
   algorithms/external_sampling_mccfr_test.py
@@ -165,14 +192,23 @@ set(PYTHON_TESTS ${PYTHON_TESTS}
   algorithms/gambit_test.py
   algorithms/generate_playthrough_test.py
   algorithms/get_all_states_test.py
+  algorithms/ismcts_agent_test.py
+  algorithms/mcts_agent_test.py
   algorithms/mcts_test.py
   algorithms/minimax_test.py
+  algorithms/nfg_utils_test.py
   algorithms/noisy_policy_test.py
   algorithms/outcome_sampling_mccfr_test.py
   algorithms/policy_aggregator_joint_test.py
   algorithms/policy_aggregator_test.py
   algorithms/projected_replicator_dynamics_test.py
   algorithms/random_agent_test.py
+  algorithms/regret_matching_test.py
+  algorithms/tabular_qlearner_test.py
+  algorithms/sequence_form_utils_test.py
+  algorithms/wolf_phc_test.py
+  algorithms/mmd_dilated_test.py
+  coalitional_games/shapley_values_test.py
   bots/bluechip_bridge_test.py
   bots/bluechip_bridge_uncontested_bidding_test.py
   bots/is_mcts_test.py
@@ -182,12 +218,16 @@ set(PYTHON_TESTS ${PYTHON_TESTS}
   egt/utils_test.py
   environments/catch_test.py
   environments/cliff_walking_test.py
+  games/block_dominoes_test.py
+  games/chat_game_test.py
+  games/chat_games/envs/base_envs/base_envs_test.py
   games/data_test.py
   games/dynamic_routing_test.py
   games/dynamic_routing_utils_test.py
+  games/liars_poker_test.py
+  games/team_dominoes_test.py
   games/tic_tac_toe_test.py
   mfg/algorithms/best_response_value_test.py
-  mfg/algorithms/fictitious_play_test.py
   mfg/algorithms/mirror_descent_test.py
   mfg/algorithms/greedy_policy_test.py
   mfg/algorithms/nash_conv_test.py
@@ -195,11 +235,15 @@ set(PYTHON_TESTS ${PYTHON_TESTS}
   mfg/games/crowd_modelling_test.py
   mfg/games/predator_prey_test.py
   mfg/games/dynamic_routing_test.py
+  mfg/games/normal_form_game_test.py
   tests/mfg_implementation_test/mfg_test.py
   tests/bot_test.py
+  tests/game_transforms_test.py
   tests/games_bridge_test.py
+  tests/games_chess_test.py
+  tests/games_euchre_test.py
+  tests/games_gin_rummy_test.py
   tests/games_sim_test.py
-  tests/higc_referee_test.py
   tests/policy_test.py
   tests/pyspiel_test.py
   tests/rl_environment_test.py
@@ -208,15 +252,27 @@ set(PYTHON_TESTS ${PYTHON_TESTS}
   utils/file_logger_test.py
   utils/lru_cache_test.py
   utils/spawn_test.py
+  voting/approval_test.py
+  voting/base_test.py
+  voting/borda_test.py
+  voting/copeland_test.py
+  voting/kemeny_young_test.py
+  voting/plurality_test.py
+  voting/ranked_pairs_test.py
+  voting/schulze_test.py
+  voting/stv_test.py
 )
 
 # Add Jax tests if it is enabled.
 if (OPEN_SPIEL_ENABLE_JAX)
-  # Only current JAX test is the bridge supervised learning example below.
   set (PYTHON_TESTS ${PYTHON_TESTS}
     jax/deep_cfr_jax_test.py
     jax/dqn_jax_test.py
     jax/nfsp_jax_test.py
+    jax/opponent_shaping_jax_test.py
+    jax/policy_gradient_jax_test.py
+    coalitional_games/least_core_lagrangian_test.py
+    mfg/algorithms/fictitious_play_test.py
   )
 endif()
 
@@ -225,11 +281,12 @@ if (OPEN_SPIEL_ENABLE_PYTORCH)
   set(PYTHON_TESTS ${PYTHON_TESTS}
       pytorch/rcfr_pytorch_test.py
       pytorch/dqn_pytorch_test.py
-      pytorch/nfsp_pytorch_test.py
       pytorch/deep_cfr_pytorch_test.py
       pytorch/eva_pytorch_test.py
       pytorch/losses/rl_losses_pytorch_test.py
       pytorch/policy_gradient_pytorch_test.py
+      pytorch/ppo_pytorch_test.py
+      pytorch/neurd_pytorch_test.py
   )
 endif()
 
@@ -237,9 +294,11 @@ endif()
 if (OPEN_SPIEL_ENABLE_TENSORFLOW)
   set(PYTHON_TESTS ${PYTHON_TESTS}
       algorithms/alpha_zero/evaluator_test.py
-      algorithms/alpha_zero/model_test.py
+      # Broken in Python 3.12. Must port to Keras 3. See https://github.com/google-deepmind/open_spiel/issues/1206.
+      # algorithms/alpha_zero/model_test.py
       algorithms/deep_cfr_test.py
-      algorithms/deep_cfr_tf2_test.py
+      # Broken in Python 3.12. Must port to Keras 3. See https://github.com/google-deepmind/open_spiel/issues/1208.
+      # algorithms/deep_cfr_tf2_test.py
       algorithms/discounted_cfr_test.py
       algorithms/dqn_test.py
       algorithms/eva_test.py
@@ -264,16 +323,24 @@ endif()
 # These require extra dependencies like cvxopt, nashpy, or matplotlib
 if (OPEN_SPIEL_ENABLE_PYTHON_MISC)
   set(PYTHON_TESTS ${PYTHON_TESTS}
+      algorithms/adidas_test.py
       algorithms/double_oracle_test.py
-      algorithms/lp_solver_test.py
       algorithms/jpsro_test.py
+      algorithms/lp_solver_test.py
+      algorithms/nash_averaging_test.py
+      algorithms/mip_nash_test.py
       algorithms/response_graph_ucb_test.py
       algorithms/sequence_form_lp_test.py
+      algorithms/stackelberg_lp_test.py
+      algorithms/tabular_multiagent_qlearner.py
       algorithms/value_iteration_test.py
+      coalitional_games/least_core_lp_test.py
+      coalitional_games/wvg_test.py
       egt/alpharank_test.py
       egt/alpharank_visualizer_test.py
       egt/visualization_test.py
       games/kuhn_poker_test.py
+      voting/maximal_lotteries_test.py
       tests/matrix_game_utils_test.py
   )
 endif()

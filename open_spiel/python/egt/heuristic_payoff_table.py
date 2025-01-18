@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,12 +14,9 @@
 
 """An object to store the heuristic payoff table for a game."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import abc
 import collections
+import math
 
 import numpy as np
 
@@ -265,15 +262,18 @@ class _PayoffTableInterface(metaclass=abc.ABCMeta):
   def __call__(self):
     """Returns a view of the table as a np.array."""
 
-  @abc.abstractproperty
+  @property
+  @abc.abstractmethod
   def num_strategies(self):
     pass
 
-  @abc.abstractproperty
+  @property
+  @abc.abstractmethod
   def num_players(self):
     pass
 
-  @abc.abstractproperty
+  @property
+  @abc.abstractmethod
   def num_rows(self):
     pass
 
@@ -314,7 +314,10 @@ class _PayoffTableInterface(metaclass=abc.ABCMeta):
     if not all([p >= 0 for p in strategy]):
       raise ValueError("The strategy probabilities should all be >= 0.")
 
-    distributions = self._distributions
+    distributions = self._distributions.astype(int)
+    if not np.all(np.isclose(self._distributions, distributions, 1e-10)):
+      raise ValueError("Conversion to integers for distributions failed.")
+
     # Multinomial coefficients (one per distribution).
     coefficients = _multinomial_coefficients(distributions)
     # Probabilities of sampling each distribution given population composition.
@@ -502,7 +505,7 @@ def _multinomial_coefficients(distributions):
   Args:
     distributions: The distributions table [num_rows, num_strategies].
   """
-  v_factorial = np.vectorize(np.math.factorial)
+  v_factorial = np.vectorize(math.factorial)
   # Multinomial coefficients (one per distribution Ni).
   # (         P         )
   # ( Ni1, Ni1, ... Nik )

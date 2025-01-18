@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,21 +16,14 @@
 
 #include <torch/torch.h>
 
-#include <algorithm>
-#include <cstring>
 #include <fstream>  // For ifstream/ofstream.
-#include <memory>
-#include <numeric>
-#include <random>
 #include <string>
 #include <vector>
 
 #include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
-#include "open_spiel/abseil-cpp/absl/strings/str_join.h"
+#include "open_spiel/algorithms/alpha_zero_torch/model.h"
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_utils.h"
-#include "open_spiel/utils/file.h"
-#include "open_spiel/utils/run_python.h"
 
 namespace open_spiel {
 namespace algorithms {
@@ -102,21 +95,25 @@ bool CreateGraphDef(const Game& game, double learning_rate, double weight_decay,
       /*nn_depth=*/nn_depth,
       /*nn_width=*/nn_width,
       /*learning_rate=*/learning_rate,
-      /*weight_decay=*/weight_decay};
+      /*weight_decay=*/weight_decay,
+      /*nn_model=*/nn_model};
 
   return SaveModelConfig(path, filename, net_config);
 }
 
-VPNetModel::VPNetModel(const Game &game, const std::string &path,
-                       const std::string &file_name, const std::string &device)
-    : device_(device), path_(path),
+VPNetModel::VPNetModel(const Game& game, const std::string& path,
+                       const std::string& file_name, const std::string& device)
+    : device_(device),
+      path_(path),
       flat_input_size_(game.ObservationTensorSize()),
       num_actions_(game.NumDistinctActions()),
       model_config_(LoadModelConfig(path, file_name)),
-      torch_device_(TorchDeviceName(device)),
       model_(model_config_, TorchDeviceName(device)),
-      model_optimizer_(model_->parameters(),
-                       torch::optim::AdamOptions(model_config_.learning_rate)) {
+      model_optimizer_(
+          model_->parameters(),
+          torch::optim::AdamOptions(  // NOLINT(misc-include-cleaner)
+              model_config_.learning_rate)),
+      torch_device_(TorchDeviceName(device)) {
   // Some assumptions that we can remove eventually. The value net returns
   // a single value in terms of player 0 and the game is assumed to be zero-sum,
   // so player 1 can just be -value.

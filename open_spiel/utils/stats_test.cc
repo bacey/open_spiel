@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -85,6 +85,19 @@ void TestHistogramNumbered() {
   SPIEL_CHECK_EQ(hist.ToJson(), json::Array({0, 0, 0}));
 }
 
+void TestHistogramTooLarge() {
+  HistogramNumbered hist(3);
+  hist.Add(-2);
+  hist.Add(-1);
+  hist.Add(0);
+  hist.Add(1);
+  hist.Add(2);
+  hist.Add(3);
+  hist.Add(4);
+
+  SPIEL_CHECK_EQ(hist.ToJson(), json::Array({3, 1, 3}));
+}
+
 void TestHistogramNamed() {
   HistogramNamed hist({"win", "loss", "draw"});
   hist.Add(0);
@@ -112,5 +125,6 @@ void TestHistogramNamed() {
 int main(int argc, char** argv) {
   open_spiel::TestBasicStats();
   open_spiel::TestHistogramNumbered();
+  open_spiel::TestHistogramTooLarge();
   open_spiel::TestHistogramNamed();
 }

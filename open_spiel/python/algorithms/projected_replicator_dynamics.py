@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,11 +18,9 @@ This is an N-player implementation of the Projected Replicator Dynamics
 algorithm described in Lanctot et al., 2017: https://arxiv.org/abs/1711.00832.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
+
+from open_spiel.python.algorithms import nfg_utils
 
 
 def _partial_multi_dot(player_payoff_tensor, strategies, index_avoided):
@@ -193,13 +191,12 @@ def projected_replicator_dynamics(payoff_tensors,
       for k in range(number_players)
   ]
 
-  average_over_last_n_strategies = average_over_last_n_strategies or prd_iterations
+  averager = nfg_utils.StrategyAverager(number_players, action_space_shapes,
+                                        average_over_last_n_strategies)
+  averager.append(new_strategies)
 
-  meta_strategy_window = []
-  for i in range(prd_iterations):
+  for _ in range(prd_iterations):
     new_strategies = _projected_replicator_dynamics_step(
         payoff_tensors, new_strategies, prd_dt, prd_gamma, use_approx)
-    if i >= prd_iterations - average_over_last_n_strategies:
-      meta_strategy_window.append(new_strategies)
-  average_new_strategies = np.mean(meta_strategy_window, axis=0)
-  return average_new_strategies
+    averager.append(new_strategies)
+  return averager.average_strategies()

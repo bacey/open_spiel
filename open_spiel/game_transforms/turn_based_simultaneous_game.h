@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,6 +45,7 @@ class TurnBasedSimultaneousState : public State {
   std::string ToString() const override;
   bool IsTerminal() const override;
   std::vector<double> Returns() const override;
+  std::vector<double> Rewards() const override;
   std::string InformationStateString(Player player) const override;
   void InformationStateTensor(Player player,
                               absl::Span<float> values) const override;
@@ -76,7 +77,7 @@ class TurnBasedSimultaneousState : public State {
   Player current_player_;
 
   // Are we currently rolling out a simultaneous move node?
-  bool rollout_mode_;
+  enum { kNoRollout = 0, kStartRollout, kMidRollout } rollout_mode_;
 };
 
 class TurnBasedSimultaneousGame : public Game {
@@ -95,7 +96,9 @@ class TurnBasedSimultaneousGame : public Game {
   int NumPlayers() const override { return game_->NumPlayers(); }
   double MinUtility() const override { return game_->MinUtility(); }
   double MaxUtility() const override { return game_->MaxUtility(); }
-  double UtilitySum() const override { return game_->UtilitySum(); }
+  absl::optional<double> UtilitySum() const override {
+    return game_->UtilitySum();
+  }
   std::vector<int> InformationStateTensorShape() const override {
     // We flatten the representation of the underlying game and add one-hot
     // indications of the to-play player and the observing player.

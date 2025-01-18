@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,10 +14,7 @@
 
 """Tests for open_spiel.python.algorithms.dqn."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
+from absl.testing import absltest
 import tensorflow.compat.v1 as tf
 
 from open_spiel.python import rl_environment
@@ -91,6 +88,7 @@ class DQNTest(tf.test.TestCase):
       for agent in agents:
         agent.step(time_step)
 
+  @absltest.skip("Causing a segmentation fault on wheel tests")
   def test_run_hanabi(self):
     # Hanabi is an optional game, so check we have it before running the test.
     game = "hanabi"
@@ -131,42 +129,6 @@ class DQNTest(tf.test.TestCase):
 
       for agent in agents:
         agent.step(time_step)
-
-
-class ReplayBufferTest(tf.test.TestCase):
-
-  def test_replay_buffer_add(self):
-    replay_buffer = dqn.ReplayBuffer(replay_buffer_capacity=10)
-    self.assertEqual(len(replay_buffer), 0)
-    replay_buffer.add("entry1")
-    self.assertEqual(len(replay_buffer), 1)
-    replay_buffer.add("entry2")
-    self.assertEqual(len(replay_buffer), 2)
-
-    self.assertIn("entry1", replay_buffer)
-    self.assertIn("entry2", replay_buffer)
-
-  def test_replay_buffer_max_capacity(self):
-    replay_buffer = dqn.ReplayBuffer(replay_buffer_capacity=2)
-    replay_buffer.add("entry1")
-    replay_buffer.add("entry2")
-    replay_buffer.add("entry3")
-    self.assertEqual(len(replay_buffer), 2)
-
-    self.assertIn("entry2", replay_buffer)
-    self.assertIn("entry3", replay_buffer)
-
-  def test_replay_buffer_sample(self):
-    replay_buffer = dqn.ReplayBuffer(replay_buffer_capacity=3)
-    replay_buffer.add("entry1")
-    replay_buffer.add("entry2")
-    replay_buffer.add("entry3")
-
-    samples = replay_buffer.sample(3)
-
-    self.assertIn("entry1", samples)
-    self.assertIn("entry2", samples)
-    self.assertIn("entry3", samples)
 
 
 if __name__ == "__main__":

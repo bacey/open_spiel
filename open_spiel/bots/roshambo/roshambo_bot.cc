@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,50 +19,42 @@ namespace roshambo {
 
 using ::roshambo_tournament::bot_map;
 
-RoshamboBot::RoshamboBot(Player player_id, std::string bot_name)
-    : player_id_(player_id),
-      bot_name_(bot_name),
-      my_history_{0},
-      opp_history_{0} {
-  if (bot_map.find(bot_name) == bot_map.end())
+RoshamboBot::RoshamboBot(Player player_id, std::string bot_name, int num_throws)
+    : player_id_(player_id), opponent_id_(1 - player_id), bot_name_(bot_name) {
+  if (auto bot_it = bot_map.find(bot_name); bot_it == bot_map.end()) {
     SpielFatalError("Invalid bot name!");
-}
-
-void RoshamboBot::Restart() {
-  my_history_.clear();
-  my_history_.push_back(0);
-  opp_history_.clear();
-  opp_history_.push_back(0);
-}
-
-Action RoshamboBot::Step(const State& /*state*/) {
-  SPIEL_CHECK_EQ(my_history_.size(), opp_history_.size());
-  // Every step must synchronize histories between the OpenSpiel wrapper
-  // bot and original C bot.
-  for (int i = 0; i < kNumThrows + 1; ++i) {
-    if (i < my_history_.size()) {
-      ROSHAMBO_BOT_my_history[i] = my_history_[i];
-      ROSHAMBO_BOT_opp_history[i] = opp_history_[i];
-    } else {
-      ROSHAMBO_BOT_my_history[i] = 0;
-      ROSHAMBO_BOT_opp_history[i] = 0;
-    }
+  } else {
+    bot_ = bot_it->second(num_throws);
   }
-  Action action = bot_map[bot_name_]();
-  my_history_.push_back(action);
-  ++my_history_[0];
-  return action;
 }
 
-// Must called after each step.
-void RoshamboBot::InformActions(const State& /*state*/,
-                                const std::vector<Action>& actions) {
-  opp_history_.push_back(actions[1 - player_id_]);
-  ++opp_history_[0];
+Action RoshamboBot::Step(const State& state) {
+  // Every step must synchronize histories between the OpenSpiel wrapper
+  // bot and the RoShamBo bot.
+  std::vector<Action> history = state.History();
+  if (history.empty()) {
+    SPIEL_CHECK_EQ(bot_->CurrentMatchLength(), 0);
+  } else {
+    const int throw_num = history.size() / 2;
+    SPIEL_CHECK_EQ(bot_->CurrentMatchLength() + 1, throw_num);
+    bot_->RecordTrial(history[((throw_num - 1) * 2) + player_id_],
+                      history[((throw_num - 1) * 2) + opponent_id_]);
+  }
+  return bot_->GetAction();
 }
 
-std::unique_ptr<Bot> MakeRoshamboBot(int player_id, std::string bot_name) {
-  return std::make_unique<RoshamboBot>(player_id, bot_name);
+std::unique_ptr<Bot> MakeRoshamboBot(int player_id, std::string bot_name,
+                                     int num_throws) {
+  return std::make_unique<RoshamboBot>(player_id, bot_name, num_throws);
+}
+
+std::vector<std::string> RoshamboBotNames() {
+  std::vector<std::string> names;
+  names.reserve(bot_map.size());
+  for (const auto& iter : bot_map) {
+    names.push_back(iter.first);
+  }
+  return names;
 }
 
 }  // namespace roshambo

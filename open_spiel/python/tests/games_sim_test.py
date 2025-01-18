@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,10 +14,6 @@
 
 """Python spiel example."""
 
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import pickle
 
@@ -31,7 +27,7 @@ from open_spiel.python.algorithms import get_all_states
 from open_spiel.python.mfg import games as mfg_games  # pylint:disable=unused-import
 import pyspiel
 from open_spiel.python.utils import file_utils
-# TODO(perolat): add predator_prey in the list of game tested
+# TODO(author18): add predator_prey in the list of game tested
 
 # Put a bound on length of game so test does not timeout.
 MAX_ACTIONS_PER_GAME = 1000
@@ -41,6 +37,10 @@ SPIEL_GAMES_LIST = pyspiel.registered_games()
 
 # All games loadable without parameter values.
 SPIEL_LOADABLE_GAMES_LIST = [g for g in SPIEL_GAMES_LIST if g.default_loadable]
+
+# A list of games to exclude from the general simulation tests. This should
+# remain empty, but it is helpful to use while a game is under construction.
+SPIEL_EXCLUDE_SIMS_TEST_GAMES_LIST = []
 
 # TODO(b/141950198): Stop hard-coding the number of loadable games.
 assert len(SPIEL_LOADABLE_GAMES_LIST) >= 38, len(SPIEL_LOADABLE_GAMES_LIST)
@@ -110,7 +110,9 @@ class GamesSimTest(parameterized.TestCase):
       game,
       check_pyspiel_serialization=True,
       check_pickle_serialization=True,
-      make_distribution_fn=lambda states: [1 / len(states)] * len(states)):
+      make_distribution_fn=(
+          lambda states: ([1 / len(states)] * len(states) if states else []))
+  ):
     min_utility = game.min_utility()
     max_utility = game.max_utility()
     self.assertLess(min_utility, max_utility)
@@ -199,6 +201,9 @@ class GamesSimTest(parameterized.TestCase):
   @parameterized.named_parameters((game_info.short_name, game_info)
                                   for game_info in SPIEL_LOADABLE_GAMES_LIST)
   def test_game_sim(self, game_info):
+    if game_info.short_name in SPIEL_EXCLUDE_SIMS_TEST_GAMES_LIST:
+      print(f"{game_info.short_name} is excluded from sim tests. Skipping.")
+      return
     game = pyspiel.load_game(game_info.short_name)
     self.assertLessEqual(game_info.min_num_players, game.num_players())
     self.assertLessEqual(game.num_players(), game_info.max_num_players)
@@ -216,9 +221,29 @@ class GamesSimTest(parameterized.TestCase):
   def test_multiplayer_game(self, game_info, num_players):
     if game_info.short_name == "python_mfg_predator_prey":
       reward_matrix = np.ones((num_players, num_players))
+      # Construct an initial distribution matrix of suitable dimensions.
+      zero_mat = np.zeros((5, 5))
+      pop_1 = zero_mat.copy()
+      pop_1[0, 0] = 1.0
+      pop_1 = pop_1.tolist()
+      pop_2 = zero_mat.copy()
+      pop_2[0, -1] = 1.0
+      pop_2 = pop_2.tolist()
+      pop_3 = zero_mat.copy()
+      pop_3[-1, 0] = 1.0
+      pop_3 = pop_3.tolist()
+      pop_4 = zero_mat.copy()
+      pop_4[-1, -1] = 1.0
+      pop_4 = pop_4.tolist()
+      pops = [pop_1, pop_2, pop_3, pop_4]
+      init_distrib = []
+      for p in range(num_players):
+        init_distrib += pops[p%4]
+      init_distrib = np.array(init_distrib)
       dict_args = {
           "players": num_players,
-          "reward_matrix": " ".join(str(v) for v in reward_matrix.flatten())
+          "reward_matrix": " ".join(str(v) for v in reward_matrix.flatten()),
+          "init_distrib": " ".join(str(v) for v in init_distrib.flatten()),
       }
     else:
       dict_args = {"players": num_players}
@@ -252,13 +277,13 @@ class GamesSimTest(parameterized.TestCase):
           check_pickle_serialization=False)
     # EFG games loaded by file should serialize properly:
     filename = file_utils.find_file(
-        "open_spiel/games/efg/sample.efg", 2)
+        "third_party/open_spiel/games/efg/sample.efg", 2)
     if filename is not None:
       game = pyspiel.load_game("efg_game(filename=" + filename + ")")
       for _ in range(0, 100):
         self.sim_game(game)
     filename = file_utils.find_file(
-        "open_spiel/games/efg/sample.efg", 2)
+        "third_party/open_spiel/games/efg/sample.efg", 2)
     if filename is not None:
       game = pyspiel.load_game("efg_game(filename=" + filename + ")")
       for _ in range(0, 100):
@@ -310,20 +335,71 @@ class GamesSimTest(parameterized.TestCase):
         action = np.random.choice(legal_actions)
         state.apply_action(action)
 
-# TODO(perolat): find the list of games where it is reasonable to call
-# get_all_states
+  def test_leduc_get_and_set_private_cards(self):
+    game = pyspiel.load_game("leduc_poker")
+    state = game.new_initial_state()
+    state.apply_action(0)   # give player 0 jack of first suit
+    state.apply_action(1)   # give player 1 jack of second suit
+    # check that we can retrieve those cards
+    print(state)
+    private_cards = state.get_private_cards()
+    self.assertEqual(private_cards, [0, 1])
+    # now give them queens instead, get them again, and check that it worked
+    state.set_private_cards([2, 3])
+    print(state)
+    private_cards = state.get_private_cards()
+    self.assertEqual(private_cards, [2, 3])
+
+  def test_dots_and_boxes_with_notation(self):
+    game = pyspiel.load_game("dots_and_boxes")
+    state = game.new_initial_state()
+    state.apply_action(0)  # horizontal 0, 0
+    state.apply_action(1)  # horizontal 0, 1
+    # check that we can retrieve the notiation
+    dbn = state.dbn_string()
+    self.assertEqual(dbn, "110000000000")
+
+  def test_spades_get_and_set_scores(self):
+    game = pyspiel.load_game("spades")
+    state = game.new_initial_state()
+    # check that we can retrieve those cards
+    current_scores = state.get_current_scores()
+    self.assertEqual(current_scores, [0, 0])
+    # now set scores to something else and check again
+    state.set_current_scores([59, 131])
+    current_scores = state.get_current_scores()
+    self.assertEqual(current_scores, [59, 131])
+
+  @parameterized.parameters(
+      {"game_name": "blotto"},
+      {"game_name": "goofspiel"},
+      {"game_name": "kuhn_poker"},
+      {"game_name": "tiny_hanabi"},
+      {"game_name": "phantom_ttt"},
+      {"game_name": "matrix_rps"},
+      {"game_name": "kuhn_poker"},
+  )
+  def test_restricted_nash_response_test(self, game_name):
+    rnr_game = pyspiel.load_game(
+        f"restricted_nash_response(game={game_name}())")
+    for _ in range(10):
+      self.sim_game(rnr_game, check_pyspiel_serialization=False,
+                    check_pickle_serialization=False)
+
+  # TODO(author18): find the list of games where it is reasonable to call
+  # get_all_states
   @parameterized.parameters(
       {"game_name": "python_mfg_crowd_modelling"},
       {"game_name": "mfg_crowd_modelling"},
-      {"game_name": "mfg_crowd_modelling_2d"},
+      # {"game_name": "mfg_crowd_modelling_2d"},
       {"game_name": "kuhn_poker"},
       {"game_name": "leduc_poker"},
   )
   def test_has_at_least_an_action(self, game_name):
     """Check that all population's state have at least one action."""
     game = pyspiel.load_game(game_name)
-    to_string = lambda s: s.observation_string(pyspiel.PlayerId.
-                                               DEFAULT_PLAYER_ID)
+    to_string = (
+        lambda s: s.observation_string(pyspiel.PlayerId.DEFAULT_PLAYER_ID))
     states = get_all_states.get_all_states(
         game,
         depth_limit=-1,

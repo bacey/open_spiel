@@ -1,16 +1,18 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include <cmath>   // for std::nan
 
 #include "jlcxx/jlcxx.hpp"
 #include "jlcxx/stl.hpp"
@@ -121,6 +123,9 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod) {
   jlcxx::stl::apply_stl<std::vector<int>>(mod);
   jlcxx::stl::apply_stl<std::vector<std::vector<int>>>(mod);
   jlcxx::stl::apply_stl<std::vector<open_spiel::Action>>(mod);
+
+  mod.map_type<open_spiel::State::PlayerAction>("PlayerAction");
+  jlcxx::stl::apply_stl<std::vector<open_spiel::State::PlayerAction>>(mod);
 
   mod.add_bits<open_spiel::GameParameter::Type>("GameParameterStateType",
                                                 jlcxx::julia_type("CppEnum"));
@@ -304,6 +309,7 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod) {
               })
       .method("to_string", &open_spiel::State::ToString)
       .method("is_terminal", &open_spiel::State::IsTerminal)
+      .method("is_initial_state", &open_spiel::State::IsInitialState)
       .method("rewards", &open_spiel::State::Rewards)
       .method("returns", &open_spiel::State::Returns)
       .method("player_reward", &open_spiel::State::PlayerReward)
@@ -314,6 +320,7 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod) {
       .method("is_player_node", &open_spiel::State::IsPlayerNode)
       .method("history", &open_spiel::State::History)
       .method("history_str", &open_spiel::State::HistoryString)
+      .method("full_history", &open_spiel::State::FullHistory)
       .method("information_state_string",
               [](open_spiel::State& s, open_spiel::Player p) {
                 return s.InformationStateString(p);
@@ -375,7 +382,10 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod) {
       .method("min_utility", &open_spiel::Game::MinUtility)
       .method("max_utility", &open_spiel::Game::MaxUtility)
       .method("get_type", &open_spiel::Game::GetType)
-      .method("utility_sum", &open_spiel::Game::UtilitySum)
+      .method("utility_sum",
+              [](open_spiel::Game& g) {
+                return g.UtilitySum().value_or(std::nan(""));
+              })
       .method("information_state_tensor_shape",
               &open_spiel::Game::InformationStateTensorShape)
       .method("information_state_tensor_size",
@@ -784,3 +794,4 @@ JLCXX_MODULE define_julia_module(jlcxx::Module& mod) {
                    include_full_observations, seed, max_unroll_length);
              });
 }  // NOLINT(readability/fn_size)
+

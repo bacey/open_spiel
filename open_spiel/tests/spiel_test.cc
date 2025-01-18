@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,10 +20,10 @@
 #include <string>
 #include <vector>
 
-#include "open_spiel/games/kuhn_poker.h"
-#include "open_spiel/games/leduc_poker.h"
-#include "open_spiel/games/liars_dice.h"
-#include "open_spiel/games/tic_tac_toe.h"
+#include "open_spiel/games/kuhn_poker/kuhn_poker.h"
+#include "open_spiel/games/leduc_poker/leduc_poker.h"
+#include "open_spiel/games/liars_dice/liars_dice.h"
+#include "open_spiel/games/tic_tac_toe/tic_tac_toe.h"
 #include "open_spiel/policy.h"
 #include "open_spiel/simultaneous_move_game.h"
 #include "open_spiel/spiel_utils.h"
@@ -49,6 +49,14 @@ void KuhnTests() {
         *LoadGame("kuhn_poker", {{"players", GameParameter(players)}}),
         /*num_sims=*/100);
   }
+}
+
+void GameEqualityTests() {
+  // 2 players is the default in kuhn poker.
+  SPIEL_CHECK_TRUE(
+      *LoadGame("kuhn_poker") == *LoadGame("kuhn_poker(players=2)"));
+  SPIEL_CHECK_FALSE(
+      *LoadGame("kuhn_poker") == *LoadGame("kuhn_poker(players=3)"));
 }
 
 void TicTacToeTests() {
@@ -135,8 +143,13 @@ void PolicyTest() {
   auto random_policy_default_seed = [](const Game& game) {
     return GetRandomPolicy(game);
   };
+  auto flat_dirichlet_policy_default_seed = [](const Game& game) {
+    return GetFlatDirichletPolicy(game);
+  };
   std::vector<PolicyGenerator> policy_generators = {
-      GetUniformPolicy, random_policy_default_seed, GetFirstActionPolicy};
+      GetUniformPolicy, random_policy_default_seed, GetFirstActionPolicy,
+      flat_dirichlet_policy_default_seed,
+  };
 
   // For some reason, this can't seem to be brace-initialized, so instead we use
   // push_back.
@@ -329,6 +342,7 @@ void PolicySerializationTest() {
 int main(int argc, char** argv) {
   open_spiel::testing::GeneralTests();
   open_spiel::testing::KuhnTests();
+  open_spiel::testing::GameEqualityTests();
   open_spiel::testing::TicTacToeTests();
   open_spiel::testing::FlatJointactionTest();
   open_spiel::testing::PolicyTest();

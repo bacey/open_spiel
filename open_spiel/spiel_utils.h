@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,8 +20,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
-#include <locale>
+#include <functional>
+#include <memory>
 #include <random>
 #include <sstream>
 #include <string>
@@ -30,11 +30,7 @@
 #include <vector>
 
 #include "open_spiel/abseil-cpp/absl/random/uniform_real_distribution.h"
-#include "open_spiel/abseil-cpp/absl/strings/ascii.h"
-#include "open_spiel/abseil-cpp/absl/strings/match.h"
 #include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
-#include "open_spiel/abseil-cpp/absl/strings/str_join.h"
-#include "open_spiel/abseil-cpp/absl/strings/str_split.h"
 #include "open_spiel/abseil-cpp/absl/time/clock.h"
 #include "open_spiel/abseil-cpp/absl/time/time.h"
 #include "open_spiel/abseil-cpp/absl/types/optional.h"
@@ -137,9 +133,12 @@ std::string SpielStrCat(Args&&... args) {
 using Player = int;
 using Action = int64_t;
 
-// Floating point comparisons use this as a multiplier on the larger of the two
-// numbers as the threshold.
-inline constexpr float FloatingPointDefaultThresholdRatio() { return 1e-5; }
+// Default floating point tolerance between two numbers.
+inline constexpr float FloatingPointDefaultTolerance() { return 1e-6; }
+
+// Default tolerance applied when validating variables are valid probability.
+inline constexpr float ProbabilityDefaultTolerance() { return 1e-9; }
+
 
 // Helpers used to convert actions represented as integers in mixed bases.
 // E.g. RankActionMixedBase({2, 3, 6}, {1, 1, 1}) = 1*18 + 1*6 + 1 = 25,
@@ -182,13 +181,12 @@ std::string VectorOfPairsToString(const std::vector<std::pair<A, B>>& vec,
                                   const std::string& pair_delimiter);
 
 // Returns whether the absolute difference between floating point values a and
-// b is less than or equal to FloatingPointThresholdRatio() * max(|a|, |b|).
+// b is less than or equal to.
 template <typename T>
 bool Near(T a, T b) {
   static_assert(std::is_floating_point<T>::value,
                 "Near() is only for floating point args.");
-  return fabs(a - b) <=
-         (std::max(fabs(a), fabs(b)) * FloatingPointDefaultThresholdRatio());
+  return fabs(a - b) <= FloatingPointDefaultTolerance();
 }
 
 // Returns whether |a - b| <= epsilon.
@@ -212,6 +210,11 @@ bool AllNear(const std::vector<T>& vector1, const std::vector<T>& vector2,
   }
   return true;
 }
+
+// Some string helpers. We should remove some of these as we upgrade abseil
+// versions.
+bool StrContainsIgnoreCase(const std::string& haystack,
+                           const std::string& needle);
 
 // Macros to check for error conditions.
 // These trigger SpielFatalError if the condition is violated.
@@ -260,6 +263,11 @@ bool AllNear(const std::vector<T>& vector1, const std::vector<T>& vector2,
   SPIEL_CHECK_GE(x, 0);     \
   SPIEL_CHECK_LE(x, 1);     \
   SPIEL_CHECK_FALSE(std::isnan(x) || std::isinf(x))
+#define SPIEL_CHECK_PROB_TOLERANCE(x, tol)      \
+  SPIEL_CHECK_GE(x, -(tol));      \
+  SPIEL_CHECK_LE(x, 1.0 + (tol)); \
+  SPIEL_CHECK_FALSE(std::isnan(x) || std::isinf(x))
+
 
 // Checks that x and y are equal to the default dynamic threshold proportional
 // to max(|x|, |y|).
@@ -276,6 +284,16 @@ bool AllNear(const std::vector<T>& vector1, const std::vector<T>& vector2,
   while (!(x))                                                   \
   open_spiel::SpielFatalError(open_spiel::internal::SpielStrCat( \
       __FILE__, ":", __LINE__, " CHECK_TRUE(", #x, ")"))
+
+// A verbose checker that will print state info:
+// Use as SPIEL_CHECK_TRUE_WSI(bool cond, const std::string& error_message,
+//                             const Game& game_ref, const State& state_ref)
+#define SPIEL_CHECK_TRUE_WSI(x, e, g, s)                         \
+  while (!(x))                                                   \
+  open_spiel::SpielFatalErrorWithStateInfo(                      \
+      open_spiel::internal::SpielStrCat(                         \
+      __FILE__, ":", __LINE__, " CHECK_TRUE(", #x, "): ", e),    \
+      (g), (s))
 
 #define SPIEL_CHECK_FALSE(x)                                     \
   while (x)                                                      \
@@ -406,6 +424,19 @@ inline To down_cast(From& f) {
   return *static_cast<ToAsPointer>(&f);
 }
 
+// Creates a sampler from a std::function<double()> conforming to the
+// probabilities received. absl::discrete_distribution requires a URBG as a
+// source of randomness (as opposed to a std::function<double()>) so cannot
+// be used directly.
+class SamplerFromRng {
+ public:
+  explicit SamplerFromRng(std::function<double()> rng) : rng_(std::move(rng)) {}
+
+  int operator()(absl::Span<const double> probs);
+
+ private:
+  std::function<double()> rng_;
+};
 
 }  // namespace open_spiel
 

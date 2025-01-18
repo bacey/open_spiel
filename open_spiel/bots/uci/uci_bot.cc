@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,24 +18,57 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <memory>
+#include <sstream>
 #include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
+#include "open_spiel/abseil-cpp/absl/strings/ascii.h"
 #include "open_spiel/abseil-cpp/absl/strings/match.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_join.h"
+#include "open_spiel/abseil-cpp/absl/strings/string_view.h"
+#include "open_spiel/abseil-cpp/absl/types/optional.h"
+#include "open_spiel/games/chess/chess.h"
+#include "open_spiel/games/chess/chess_board.h"
+#include "open_spiel/spiel.h"
+#include "open_spiel/spiel_bots.h"
+#include "open_spiel/spiel_utils.h"
+#include "open_spiel/utils/file.h"
 
 namespace open_spiel {
 namespace uci {
 
-UCIBot::UCIBot(const std::string& bot_binary_path, int move_time, bool ponder,
-               const Options& options)
-    : ponder_(ponder) {
-  SPIEL_CHECK_GT(move_time, 0);
+UCIBot::UCIBot(const std::string& bot_binary_path, int search_limit_value,
+               bool ponder, const Options& options,
+               SearchLimitType search_limit_type,
+               bool use_game_history_for_position)
+    : ponder_(ponder),
+      use_game_history_for_position_(use_game_history_for_position) {
+  SPIEL_CHECK_GT(search_limit_value, 0);
   SPIEL_CHECK_GT(bot_binary_path.size(), 0);
-  move_time_ = move_time;
+  search_limit_type_ = search_limit_type;
+  search_limit_value_ = search_limit_value;
+  if (search_limit_type_ == SearchLimitType::kMoveTime) {
+    search_limit_string_ = "movetime " + std::to_string(search_limit_value_);
+  } else if (search_limit_type_ == SearchLimitType::kNodes) {
+    search_limit_string_ = "nodes " + std::to_string(search_limit_value_);
+  } else if (search_limit_type_ == SearchLimitType::kDepth) {
+    search_limit_string_ = "depth " + std::to_string(search_limit_value_);
+  } else {
+    SpielFatalError("Unsupported search limit type");
+  }
 
   StartProcess(bot_binary_path);
   Uci();
-  for (auto const &[name, value] : options) {
+  for (auto const& [name, value] : options) {
     SetOption(name, value);
   }
   IsReady();
@@ -51,36 +84,61 @@ UCIBot::~UCIBot() {
   if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
     std::cerr << "Uci sub-process failed" << std::endl;
   }
+
+  // Close the input stream
+  fclose(input_stream_);
+  // Free the input stream buffer allocated in ReadLine
+  free(input_stream_buffer_);
+  // Close the output pipe
+  close(output_fd_);
 }
 
-Action UCIBot::Step(const State& state) {
+void UCIBot::PositionFromState(const chess::ChessState& state,
+                               const std::vector<std::string>& extra_moves) {
+  if (use_game_history_for_position_) {
+    std::pair<std::string, std::vector<std::string>> fen_and_moves =
+        state.ExtractFenAndMaybeMoves();
+    fen_and_moves.second.insert(fen_and_moves.second.end(),
+                                extra_moves.begin(), extra_moves.end());
+    Position(fen_and_moves.first, fen_and_moves.second);
+  } else {
+    Position(state.Board().ToFEN(), extra_moves);
+  }
+}
+
+Action UCIBot::Step(const State& state) { return StepVerbose(state).first; }
+
+std::pair<Action, std::string> UCIBot::StepVerbose(const State& state) {
   std::string move_str;
+  std::string info_str;  // Contains the last info string from the bot.
   auto chess_state = down_cast<const chess::ChessState&>(state);
+  auto chess_game = down_cast<const chess::ChessGame*>(state.GetGame().get());
   if (ponder_ && ponder_move_) {
     if (!was_ponder_hit_) {
       Stop();
-      Position(chess_state.Board().ToFEN());
-      tie(move_str, ponder_move_) = Go();
+      PositionFromState(chess_state);
+      tie(move_str, ponder_move_) = Go(&info_str);
     } else {
-      tie(move_str, ponder_move_) = ReadBestMove();
+      tie(move_str, ponder_move_) = ReadBestMove(&info_str);
     }
   } else {
-    Position(chess_state.Board().ToFEN());
-    tie(move_str, ponder_move_) = Go();
+    PositionFromState(chess_state);
+    tie(move_str, ponder_move_) = Go(&info_str);
   }
   was_ponder_hit_ = false;
-  auto move = chess_state.Board().ParseLANMove(move_str);
+  auto move = chess_state.Board().ParseLANMove(move_str,
+                                               chess_game->IsChess960());
   if (!move) {
     SpielFatalError("Uci sub-process returned an illegal or invalid move");
   }
 
   if (ponder_ && ponder_move_) {
-    Position(chess_state.Board().ToFEN(), {move_str, *ponder_move_});
+    PositionFromState(chess_state, {move_str, *ponder_move_});
     GoPonder();
   }
 
-  Action action = chess::MoveToAction(*move);
-  return action;
+  Action action = chess::MoveToAction(*move, chess_state.BoardSize());
+  return {action, info_str};
 }
 
 void UCIBot::Restart() {
@@ -92,14 +150,16 @@ void UCIBot::Restart() {
 void UCIBot::RestartAt(const State& state) {
   ponder_move_ = absl::nullopt;
   was_ponder_hit_ = false;
-  auto chess_state = down_cast<const chess::ChessState &>(state);
-  Position(chess_state.Board().ToFEN());
+  auto chess_state = down_cast<const chess::ChessState&>(state);
+  PositionFromState(chess_state);
 }
 
 void UCIBot::InformAction(const State& state, Player player_id, Action action) {
-  auto chess_state = down_cast<const chess::ChessState &>(state);
+  auto chess_state = down_cast<const chess::ChessState&>(state);
+  auto chess_game = down_cast<const chess::ChessGame*>(state.GetGame().get());
   chess::Move move = chess::ActionToMove(action, chess_state.Board());
-  std::string move_str = move.ToLAN();
+  std::string move_str = move.ToLAN(chess_game->IsChess960(),
+                                    &chess_state.Board());
   if (ponder_ && move_str == ponder_move_) {
     PonderHit();
     was_ponder_hit_ = true;
@@ -124,7 +184,11 @@ void UCIBot::StartProcess(const std::string& bot_binary_path) {
     close(input_pipe[1]);
 
     output_fd_ = output_pipe[1];
-    input_fd_ = input_pipe[0];
+    input_stream_ = fdopen(input_pipe[0], "r");
+    if (input_stream_ == nullptr) {
+      SpielFatalError("Opening the UCI input pipe as a file stream failed");
+    }
+
   } else {  // child
     dup2(output_pipe[0], STDIN_FILENO);
     dup2(input_pipe[1], STDOUT_FILENO);
@@ -133,13 +197,14 @@ void UCIBot::StartProcess(const std::string& bot_binary_path) {
     close(output_pipe[1]);
     close(input_pipe[0]);
 
-    execlp(bot_binary_path.c_str(), bot_binary_path.c_str(), (char *)nullptr);
+    std::string real_binary_path = open_spiel::file::RealPath(bot_binary_path);
+    execlp(real_binary_path.c_str(), real_binary_path.c_str(), (char*)nullptr);
     // See /usr/include/asm-generic/errno-base.h for error codes.
     switch (errno) {
       case ENOENT:
         SpielFatalError(
             absl::StrCat("Executing uci bot sub-process failed: file '",
-                         bot_binary_path, "' not found."));
+                         real_binary_path, "' not found."));
       default:
         SpielFatalError(absl::StrCat(
             "Executing uci bot sub-process failed: Error ", errno));
@@ -150,8 +215,12 @@ void UCIBot::StartProcess(const std::string& bot_binary_path) {
 void UCIBot::Uci() {
   Write("uci");
   while (true) {
-    std::string response = Read(false);
+    std::string response = ReadLine();
     if (!response.empty()) {
+      if (absl::StartsWith(response, "id") ||
+          absl::StartsWith(response, "option")) {
+        continue;  // Don't print options and ids
+      }
       if (absl::StrContains(response, "uciok")) {
         return;
       } else {
@@ -171,7 +240,7 @@ void UCIBot::UciNewGame() { Write("ucinewgame"); }
 void UCIBot::IsReady() {
   Write("isready");
   while (true) {
-    std::string response = Read(false);
+    std::string response = ReadLine();
     if (!response.empty()) {
       if (absl::StrContains(response, "readyok")) {
         return;
@@ -192,14 +261,13 @@ void UCIBot::Position(const std::string& fen,
   Write(msg);
 }
 
-std::pair<std::string, absl::optional<std::string>> UCIBot::Go() {
-  Write("go movetime " + std::to_string(move_time_));
-  return ReadBestMove();
+std::pair<std::string, absl::optional<std::string>> UCIBot::Go(
+    absl::optional<std::string*> info_string) {
+  Write("go " + search_limit_string_);
+  return ReadBestMove(info_string);
 }
 
-void UCIBot::GoPonder() {
-  Write("go ponder movetime " + std::to_string(move_time_));
-}
+void UCIBot::GoPonder() { Write("go ponder " + search_limit_string_); }
 
 void UCIBot::PonderHit() { Write("ponderhit"); }
 
@@ -210,28 +278,34 @@ std::pair<std::string, absl::optional<std::string>> UCIBot::Stop() {
 
 void UCIBot::Quit() { Write("quit"); }
 
-std::pair<std::string, absl::optional<std::string>> UCIBot::ReadBestMove() {
+std::pair<std::string, absl::optional<std::string>> UCIBot::ReadBestMove(
+    absl::optional<std::string*> info_string) {
   while (true) {
-    auto response = Read(true);
-    std::istringstream response_stream(response);
-    std::string line;
-    while (getline(response_stream, line)) {
-      std::istringstream line_stream(line);
-      std::string token;
-      std::string move_str;
-      absl::optional<std::string> ponder_str = absl::nullopt;
-      line_stream >> std::skipws;
-      while (line_stream >> token) {
-        if (token == "bestmove") {
-          line_stream >> move_str;
-        } else if (token == "ponder") {
-          line_stream >> token;
-          ponder_str = token;
-        }
+    // istringstream can't use a string_view so we need to copy to a string.
+    std::string response = ReadLine();
+    // Save the most recent info string if requested. Specifying that the string
+    // contains the number of nodes makes sure that we don't save strings of the
+    // form "info depth 30 currmove c2c1 currmovenumber 22", we want the ones
+    // with metadata about the search.
+    if (info_string.has_value() && absl::StartsWith(response, "info") &&
+        absl::StrContains(response, "nodes")) {
+      *info_string.value() = response;
+    }
+    std::istringstream response_line(response);
+    std::string token;
+    std::string move_str;
+    absl::optional<std::string> ponder_str = absl::nullopt;
+    response_line >> std::skipws;
+    while (response_line >> token) {
+      if (token == "bestmove") {
+        response_line >> move_str;
+      } else if (token == "ponder") {
+        response_line >> token;
+        ponder_str = token;
       }
-      if (!move_str.empty()) {
-        return std::make_pair(move_str, ponder_str);
-      }
+    }
+    if (!move_str.empty()) {
+      return std::make_pair(move_str, ponder_str);
     }
   }
 }
@@ -243,45 +317,29 @@ void UCIBot::Write(const std::string& msg) const {
   }
 }
 
-std::string UCIBot::Read(bool wait) const {
-  char *buff;
-  int count = 0;
-  std::string response;
-
-  fd_set fds;
-  FD_ZERO(&fds);
-  FD_SET(input_fd_, &fds);
-  timeval timeout = {5, 0};  // 5 second timeout.
-
-  int ready_fd = select(/*nfds=*/input_fd_ + 1,
-                        /*readfds=*/&fds,
-                        /*writefds=*/nullptr,
-                        /*exceptfds*/ nullptr, wait ? nullptr : &timeout);
-  if (ready_fd == -1) {
-    SpielFatalError("Failed to read from uci sub-process");
+std::string UCIBot::ReadLine() {
+  if (auto bytes_read = ::getline(&input_stream_buffer_,
+                                  &input_stream_buffer_size_, input_stream_);
+      bytes_read != -1) {
+    absl::string_view response =
+        absl::string_view(input_stream_buffer_, bytes_read);
+    // Remove the trailing newline that getline left in the string.
+    // Using a string_view as input saves us from copying the string.
+    return std::string(absl::StripTrailingAsciiWhitespace(response));
   }
-  if (ready_fd == 0) {
-    SpielFatalError("Response from uci sub-process not received in time");
-  }
-  if (ioctl(input_fd_, FIONREAD, &count) == -1) {
-    SpielFatalError("Failed to read input size.");
-  }
-  if (count == 0) {
-    return "";
-  }
-  buff = (char*)malloc(count);
-  if (read(input_fd_, buff, count) != count) {
-    SpielFatalError("Read wrong number of bytes");
-  }
-  response.assign(buff, count);
-  free(buff);
-  return response;
+  std::cerr << "Failed to read from input stream: " << std::strerror(errno)
+            << "\n";
+  SpielFatalError("Reading a line from uci sub-process failed");
 }
 
 std::unique_ptr<Bot> MakeUCIBot(const std::string& bot_binary_path,
-                                int move_time, bool ponder,
-                                const Options& options) {
-  return std::make_unique<UCIBot>(bot_binary_path, move_time, ponder, options);
+                                int search_limit_value, bool ponder,
+                                const Options& options,
+                                SearchLimitType search_limit_type,
+                                bool use_game_history_for_position) {
+  return std::make_unique<UCIBot>(bot_binary_path, search_limit_value, ponder,
+                                  options, search_limit_type,
+                                  use_game_history_for_position);
 }
 
 }  // namespace uci

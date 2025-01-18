@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -69,17 +69,14 @@ See  open_spiel/python/pytorch/losses/rl_losses_test.py for an example of the
 loss computation.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 import collections
 import os
 from absl import logging
 import numpy as np
 import torch
-import torch.nn as nn
+from torch import nn
+from torch import optim
 import torch.nn.functional as F
-import torch.optim as optim
 
 from open_spiel.python import rl_agent
 from open_spiel.python.pytorch.dqn import SonnetLinear
@@ -146,8 +143,8 @@ class PolicyGradient(rl_agent.AbstractAgent):
       info_state_size: int, info_state vector size.
       num_actions: int, number of actions per info state.
       loss_str: string or None. If string, must be one of ["rpg", "qpg", "rm",
-        "a2c"] and defined in `_get_loss_class`. If None, a loss class must be
-        passed through `loss_class`. Defaults to "a2c".
+        "a2c", "neurd"] and defined in `_get_loss_class`. If None, a loss class
+        must be passed through `loss_class`. Defaults to "a2c".
       loss_class: Class or None. If Class, it must define the policy gradient
         loss. If None a loss class in a string format must be passed through
         `loss_str`. Defaults to None.
@@ -209,7 +206,7 @@ class PolicyGradient(rl_agent.AbstractAgent):
 
     self._savers = []
 
-    # Add baseline (V) head for A2C (or Q-head for QPG / RPG / RMPG)
+    # Add baseline (V) head for A2C (or Q-head for QPG / RPG / RMPG / NeuRD)
     if optimizer_str == "adam":
       self._critic_optimizer = optim.Adam
     elif optimizer_str == "sgd":
@@ -252,6 +249,8 @@ class PolicyGradient(rl_agent.AbstractAgent):
       return rl_losses.BatchRMLoss
     elif loss_str == "a2c":
       return rl_losses.BatchA2CLoss
+    elif loss_str == "neurd":
+      return rl_losses.BatchNeuRDLoss
 
   def minimize_with_clipping(self, model, optimizer, loss):
     optimizer.zero_grad()
@@ -425,9 +424,9 @@ class PolicyGradient(rl_agent.AbstractAgent):
     else:
       # Q-loss otherwise.
       q_values = self._q_values_layer(torso_out)
-      action_indices = torch.stack([torch.range(q_values.shape[0]), action],
-                                   dim=-1)
-      value_predictions = torch.gather_nd(q_values, action_indices)
+      action_indices = torch.stack(
+          [torch.arange(q_values.shape[0], dtype=torch.long), action], dim=0)
+      value_predictions = q_values[list(action_indices)]
       critic_loss = torch.mean(F.mse_loss(value_predictions, return_))
       self.minimize_with_clipping(self._q_values_layer, self._critic_optimizer,
                                   critic_loss)
@@ -454,13 +453,13 @@ class PolicyGradient(rl_agent.AbstractAgent):
           baseline=baseline,
           actions=action,
           returns=return_)
-      self.minimize_with_clipping(self._baseline_layer, self._pi_optimizer,
+      self.minimize_with_clipping(self._policy_logits_layer, self._pi_optimizer,
                                   pi_loss)
     else:
       q_values = self._q_values_layer(torso_out)
       pi_loss = self.pg_class.loss(
           policy_logits=self._policy_logits, action_values=q_values)
-      self.minimize_with_clipping(self._q_values_layer, self._pi_optimizer,
+      self.minimize_with_clipping(self._policy_logits_layer, self._pi_optimizer,
                                   pi_loss)
     self._last_pi_loss_value = pi_loss
     return pi_loss

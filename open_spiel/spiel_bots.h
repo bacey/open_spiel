@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
 #define OPEN_SPIEL_SPIEL_BOTS_H_
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -78,11 +79,34 @@ class Bot {
   // safely assumes the action was played.
   virtual Action Step(const State& state) = 0;
 
+  // Same as Action except the bot is given the opportunity to return verbose
+  // output.  This will allow callers of `StepVerbose` to log information about
+  // the action for bots that support this function.
+  virtual std::pair<Action, std::string> StepVerbose(const State& state) {
+    return {Step(state), ""};
+  }
+
   // Let the bot know that a different player made an action at a given state.
+  //
+  // The state is the state at which the `player_id` player decided to take
+  // the given `action` (but before it is applied to the state). Some usage
+  // example looks like:
+  //
+  //   Player current_player = state->CurrentPlayer();
+  //   Action action = bots[current_player]->Step(*state);
+  //   for (Player p = 0; p < num_players; ++p) {
+  //     if (p != current_player) {
+  //       bots[p]->InformAction(*state, current_player, action);
+  //     }
+  //   }
+  //   state->ApplyAction(action);  # We apply the action after informing bots.
+  //
   // This is useful for stateful bots so they know that the state of the game
   // has advanced. This should not be called for the bot that generated the
   // action as it already knows the action it took. As most bots are not
   // stateful, the default implementation is a no-op.
+  // This is more explicit and less error prone than having bots inspect and
+  // potentially replay the history of actions.
   virtual void InformAction(const State& state, Player player_id,
                             Action action) {}
   // In simultaneous move games the bot receives a vector containing the
@@ -140,6 +164,23 @@ class Bot {
           "StepWithPolicy not implemented because the bot is not exposing any "
           "policy.");
     }
+  }
+
+  // Creates a clone of the bot with an independent copy of its internal state.
+  // The original bot and the clone are completely independent.
+  // The Clone method should be as cheap to execute as possible.
+  //
+  // Important: the cloned bot must sample actions independently and differently
+  // from the original bot. I.e. if the bot uses any randomness controlling key,
+  // that key *must* be reseeded when cloning the bot.
+  // The typical use-case for cloning is generating multiple continuations
+  // of a game. The cloned bot should produce the same policy as the original
+  // bot, but there *must* be no correllation between action sampling of
+  // the original bot and its clone.
+  // Note that bot clones must also sample actions independently.
+  virtual bool IsClonable() const { return false; }
+  virtual std::unique_ptr<Bot> Clone() {
+    SpielFatalError("Clone method not implemented.");
   }
 };
 

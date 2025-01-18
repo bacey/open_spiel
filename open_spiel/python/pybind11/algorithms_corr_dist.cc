@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,15 +14,18 @@
 
 #include "open_spiel/python/pybind11/algorithms_corr_dist.h"
 
-// Python bindings for trajectories.h
+#include <memory>
 
 #include "open_spiel/algorithms/corr_dev_builder.h"
 #include "open_spiel/algorithms/corr_dist.h"
-#include "open_spiel/python/pybind11/pybind11.h"
+#include "open_spiel/spiel.h"
+#include "pybind11/include/pybind11/cast.h"
+#include "pybind11/include/pybind11/pybind11.h"
 
 namespace open_spiel {
 namespace py = ::pybind11;
 
+using open_spiel::algorithms::CorrDevBuilder;
 using open_spiel::algorithms::CorrDistInfo;
 using open_spiel::algorithms::CorrelationDevice;
 
@@ -50,27 +53,56 @@ void init_pyspiel_algorithms_corr_dist(py::module& m) {
       .def_readonly("conditional_best_response_policies",
                     &CorrDistInfo::conditional_best_response_policies);
 
-  m.def("cce_dist",
-        py::overload_cast<const Game&, const CorrelationDevice&, int, float>(
-            &open_spiel::algorithms::CCEDist),
-        "Returns a player's distance to a coarse-correlated equilibrium.",
-        py::arg("game"),
-        py::arg("correlation_device"),
-        py::arg("player"),
-        py::arg("prob_cut_threshold") = -1.0);
+  py::class_<CorrDevBuilder> corr_dev_builder(m, "CorrDevBuilder");
+  corr_dev_builder.def(py::init<int>(), py::arg("seed") = 0)
+      .def("add_deterministic_joint_policy",
+           &CorrDevBuilder::AddDeterminsticJointPolicy,
+           py::arg("policy"), py::arg("weight") = 1.0)
+      .def("add_sampled_joint_policy",
+           &CorrDevBuilder::AddSampledJointPolicy,
+           py::arg("policy"), py::arg("num_samples"), py::arg("weight") = 1.0)
+      .def("add_mixed_joint_policy",
+            &CorrDevBuilder::AddMixedJointPolicy,
+            py::arg("policy"),
+            py::arg("weight") = 1.0)
+      .def("get_correlation_device", &CorrDevBuilder::GetCorrelationDevice);
 
-  m.def("cce_dist",
-        py::overload_cast<const Game&, const CorrelationDevice&, float>(
-            &open_spiel::algorithms::CCEDist),
-        "Returns the distance to a coarse-correlated equilibrium.",
-        py::arg("game"),
-        py::arg("correlation_device"),
-        py::arg("prob_cut_threshold") = -1.0);
+  m.def(
+      "cce_dist",
+      [](std::shared_ptr<const Game> game,
+         const CorrelationDevice& correlation_device, int player,
+         float prob_cut_threshold, const float action_value_tolerance) {
+        return algorithms::CCEDist(*game, correlation_device, player,
+                                   prob_cut_threshold, action_value_tolerance);
+      },
+      "Returns a player's distance to a coarse-correlated equilibrium.",
+      py::arg("game"), py::arg("correlation_device"), py::arg("player"),
+      py::arg("prob_cut_threshold") = -1.0,
+      py::arg("action_value_tolerance") = -1.0);
 
-  m.def("ce_dist",
-        py::overload_cast<const Game&, const CorrelationDevice&>(
-            &open_spiel::algorithms::CEDist),
-        "Returns the distance to a correlated equilibrium.");
+  m.def(
+      "cce_dist",
+      [](std::shared_ptr<const Game> game,
+         const CorrelationDevice& correlation_device, float prob_cut_threshold,
+         const float action_value_tolerance) {
+        return algorithms::CCEDist(*game, correlation_device,
+                                   prob_cut_threshold, action_value_tolerance);
+      },
+      "Returns the distance to a coarse-correlated equilibrium.",
+      py::arg("game"), py::arg("correlation_device"),
+      py::arg("prob_cut_threshold") = -1.0,
+      py::arg("action_value_tolerance") = false);
+
+  m.def(
+      "ce_dist",
+      [](std::shared_ptr<const Game> game,
+         const CorrelationDevice& correlation_device,
+         const float action_value_tolerance) {
+        return algorithms::CEDist(*game, correlation_device,
+                                  action_value_tolerance);
+      },
+      "Returns the distance to a correlated equilibrium.", py::arg("game"),
+      py::arg("correlation_device"), py::arg("action_value_tolerance") = -1.0);
 
   // TODO(author5): expose the rest of the functions.
 }

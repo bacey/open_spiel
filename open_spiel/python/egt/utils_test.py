@@ -1,10 +1,10 @@
-# Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+# Copyright 2019 DeepMind Technologies Limited
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,10 +13,6 @@
 # limitations under the License.
 
 """Tests for open_spiel.python.egt.utils."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import itertools
 from absl.testing import absltest
@@ -88,8 +84,8 @@ class UtilsTest(parameterized.TestCase):
       (10, 5),
   )
   def test_distribution_equivalent_implementation(self, num_items, num_slots):
-    distribution = np.vstack(
-        utils.distribute(num_items, num_slots, normalize=False))
+    dist_list = list(utils.distribute(num_items, num_slots, normalize=False))
+    distribution = np.vstack(dist_list)
 
     other_implementation = _generate_prob_profiles(num_items, num_slots)
     np.testing.assert_array_equal(
@@ -191,8 +187,8 @@ class UtilsTest(parameterized.TestCase):
     """Test `sample_from_simplex`."""
     x = utils.sample_from_simplex(n, dim=dim, vmin=vmin)
     np.testing.assert_allclose(np.sum(x, axis=1), np.ones(n))
-    self.assertTrue(np.alltrue(x <= 1. - vmin))
-    self.assertTrue(np.alltrue(x >= vmin))
+    self.assertTrue(np.all(x <= 1. - vmin))
+    self.assertTrue(np.all(x >= vmin))
 
 
 if __name__ == "__main__":

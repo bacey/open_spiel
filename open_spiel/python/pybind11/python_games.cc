@@ -1,10 +1,10 @@
-// Copyright 2019 DeepMind Technologies Ltd. All rights reserved.
+// Copyright 2021 DeepMind Technologies Limited
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,18 +14,29 @@
 
 #include "open_spiel/python/pybind11/python_games.h"
 
+#include <algorithm>
+#include <string>
 #include <memory>
+#include <vector>
 
 // Interface code for using Python Games and States from C++.
 
+#include "open_spiel/abseil-cpp/absl/container/inlined_vector.h"
 #include "open_spiel/abseil-cpp/absl/strings/escaping.h"
 #include "open_spiel/abseil-cpp/absl/strings/numbers.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_cat.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_join.h"
 #include "open_spiel/abseil-cpp/absl/strings/string_view.h"
+#include "open_spiel/abseil-cpp/absl/strings/str_split.h"
+#include "open_spiel/abseil-cpp/absl/types/optional.h"
+#include "open_spiel/abseil-cpp/absl/types/span.h"
 #include "open_spiel/game_parameters.h"
 #include "open_spiel/python/pybind11/pybind11.h"
+#include "open_spiel/observer.h"
 #include "open_spiel/spiel.h"
 #include "open_spiel/spiel_globals.h"
 #include "open_spiel/spiel_utils.h"
+
 
 namespace open_spiel {
 
@@ -38,6 +49,11 @@ PyGame::PyGame(GameType game_type, GameInfo game_info,
 std::unique_ptr<State> PyGame::NewInitialState() const {
   PYBIND11_OVERLOAD_PURE_NAME(std::unique_ptr<State>, Game, "new_initial_state",
                               NewInitialState);
+}
+
+std::unique_ptr<State> PyGame::NewInitialState(const std::string& str) const {
+  PYBIND11_OVERLOAD_PURE_NAME(std::unique_ptr<State>, Game, "new_initial_state",
+                              NewInitialState, str);
 }
 
 std::unique_ptr<State> PyGame::NewInitialStateForPopulation(
@@ -82,7 +98,7 @@ std::vector<Action> PyState::LegalActions(Player player) const {
                                 LegalActions, player);
   } else if (player < 0) {
     SpielFatalError(
-        absl::StrCat("Called LegalActions for psuedo-player ", player));
+        absl::StrCat("Called LegalActions for pseudo-player ", player));
   } else {
     return {};
   }
@@ -369,11 +385,10 @@ std::string PyState::Serialize() const {
 }
 
 int PyState::MeanFieldPopulation() const {
-  // Use a python population() implementation if available.
-  PYBIND11_OVERRIDE_IMPL(int, State, "mean_field_population");
-
-  // Otherwise, default to behavior from the base class.
-  return State::MeanFieldPopulation();
+  // Use a Python implementation if available, fall back to the C++
+  // implementation if not.
+  PYBIND11_OVERRIDE_NAME(int, State, "mean_field_population",
+                              MeanFieldPopulation, /* no arguments */);
 }
 
 }  // namespace open_spiel
